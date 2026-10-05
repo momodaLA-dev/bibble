@@ -78,7 +78,7 @@ function refreshAvailability(){
   const n=filterQuestions(currentSettings()).length, wanted=Number($("#countSelect").value);
   $("#questionAvailability").innerHTML=n
     ?`目前符合條件：<b>${n}</b> 題${n<wanted?`，少於設定的 ${wanted} 題，實際只會出 ${n} 題。`:""}`
-    :`目前這個範圍尚未匯入《和合本》題目。請先在 <code>assets/questions.js</code> 加入已核對的題庫。`;
+    :`目前這個範圍尚未匯入《和合本》題目。請先在 <code>questions/</code> 加入已核對的題庫。`;
   $("#startGameBtn").disabled=n===0;
 }
 
