@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07111f">
+  <title>和合本聖經問答競賽</title>
+  <link rel="stylesheet" href="./assets/styles.css">
+</head>
+<body>
+  <main id="app" class="app">
+    <header class="header">
+      <div>
+        <div class="brand">📖 和合本聖經問答競賽</div>
+        <div class="muted">從創世記到啟示錄・四選一・30 秒・主持人控制節奏</div>
+      </div>
+      <button id="homeBtn" class="ghost hidden">⌂ 回首頁</button>
+    </header>
+
+    <section id="home" class="glass hero">
+      <div class="eyebrow">BIBLE CHALLENGE</div>
+      <h1>今天要怎麼挑戰？</h1>
+      <div class="mode-grid">
+        <button class="mode-card" data-mode="solo">
+          <span class="mode-icon">👤</span><b>單人競技</b>
+          <small>手機、平板、電腦都可直接作答，不需要掃 QR Code</small>
+        </button>
+        <button class="mode-card" data-mode="team">
+          <span class="mode-icon">⚔️</span><b>兩隊競賽</b>
+          <small>建立房間與 QR Code，玩家掃碼後選 A隊／B隊一起競賽</small>
+        </button>
+        <button class="mode-card" data-mode="online">
+          <span class="mode-icon">📱</span><b>手機多人</b>
+          <small>建立房間與 QR Code，各自累積個人分數與排行榜</small>
+        </button>
+      </div>
+    </section>
+
+    <section id="onlineLobby" class="grid2 hidden">
+      <div class="glass">
+        <div id="lobbyModeLabel" class="eyebrow">手機多人模式</div>
+        <h2>掃碼加入本局</h2>
+        <div id="qr" class="qr-box"></div>
+        <div id="joinUrl" class="join-url"></div>
+        <div class="room-line">房號 <strong id="roomCode">-----</strong></div>
+        <div class="button-row"><button id="onlineSetupBtn" class="primary">設定題目</button><button id="newRoomBtn" class="secondary">建立新房</button></div>
+      </div>
+      <div class="glass">
+        <div class="title-row"><h2 id="waitingTitle">玩家等待區</h2><strong id="playerCount">0 人</strong></div>
+        <div id="teamLobbySummary" class="team-lobby-summary hidden">
+          <div><b id="lobbyTeamAName">A隊</b><strong id="teamACount">0 人</strong></div>
+          <div><b id="lobbyTeamBName">B隊</b><strong id="teamBCount">0 人</strong></div>
+        </div>
+        <div id="players" class="player-wrap"></div>
+        <p class="muted">人數不限，1 人也能加入；不補 AI，不限制奇數或偶數。</p>
+      </div>
+    </section>
+
+    <section id="setup" class="glass hidden">
+      <div class="eyebrow">遊戲設定</div>
+      <h2 id="setupTitle">設定題目</h2>
+      <div class="setup-grid">
+        <label>範圍
+          <select id="testamentSelect">
+            <option value="all">全聖經</option>
+            <option value="old">舊約</option>
+            <option value="new">新約</option>
+          </select>
+        </label>
+        <label>經卷
+          <select id="bookSelect"><option value="all">全部經卷</option></select>
+        </label>
+        <label>難度
+          <select id="difficultySelect">
+            <option value="easy">🟢 簡單</option>
+            <option value="normal">🟡 普通</option>
+            <option value="hard">🔴 困難</option>
+            <option value="heaven">👼 上天堂</option>
+          </select>
+        </label>
+        <label>題數
+          <select id="countSelect">
+            <option value="5">5 題</option><option value="10">10 題</option><option value="15">15 題</option><option value="20">20 題</option>
+          </select>
+        </label>
+      </div>
+      <div id="teamNames" class="team-name-grid hidden">
+        <label>A 隊名稱<input id="teamAName" value="A隊" maxlength="12"></label>
+        <label>B 隊名稱<input id="teamBName" value="B隊" maxlength="12"></label>
+      </div>
+      <div id="questionAvailability" class="notice"></div>
+      <div class="button-row"><button id="startGameBtn" class="primary">開始遊戲</button><button id="backModeBtn" class="secondary">返回</button></div>
+    </section>
+
+    <section id="game" class="glass hidden">
+      <div class="question-meta">
+        <div><strong id="progress">第 1 / 5 題</strong><span id="difficultyBadge" class="badge"></span></div>
+        <strong>⏱ <span id="timer">30</span> 秒</strong>
+      </div>
+      <div class="timer-shell"><div id="timerBar" class="timer-bar"></div></div>
+      <div id="bookRef" class="reference-top"></div>
+      <div id="questionText" class="question"></div>
+      <div id="choices" class="choice-grid">
+        <button class="choice choice-a" data-choice="A"><span class="letter">A</span><span id="answerA" class="answer"></span><span id="votesA" class="vote-count hidden"></span></button>
+        <button class="choice choice-b" data-choice="B"><span class="letter">B</span><span id="answerB" class="answer"></span><span id="votesB" class="vote-count hidden"></span></button>
+        <button class="choice choice-c" data-choice="C"><span class="letter">C</span><span id="answerC" class="answer"></span><span id="votesC" class="vote-count hidden"></span></button>
+        <button class="choice choice-d" data-choice="D"><span class="letter">D</span><span id="answerD" class="answer"></span><span id="votesD" class="vote-count hidden"></span></button>
+      </div>
+      <div id="status" class="status">請作答</div>
+      <div id="answerPanel" class="answer-panel hidden">
+        <div id="correctAnswer" class="correct-answer"></div>
+        <div id="scriptureRef" class="scripture-ref"></div>
+        <div id="explanation" class="muted"></div>
+      </div>
+      <div id="teamScorePanel" class="team-score-panel hidden">
+        <div class="team-score-card"><b id="teamALabel">A隊</b><strong id="teamAScore">0</strong></div>
+        <div class="team-score-card"><b id="teamBLabel">B隊</b><strong id="teamBScore">0</strong></div>
+      </div>
+      <div class="button-row center">
+        <button id="revealBtn" class="primary">公布答案</button>
+        <button id="nextBtn" class="primary hidden">下一題 ▶</button>
+      </div>
+    </section>
+
+    <section id="ranking" class="glass hidden">
+      <div class="eyebrow">FINAL RESULT</div>
+      <h2>🏆 最終結果</h2>
+      <div id="rankList" class="rank-list"></div>
+      <button id="restartBtn" class="primary">再玩一局</button>
+    </section>
+  </main>
+  <script type="module" src="./assets/screen.js"></script>
+</body>
+</html>
