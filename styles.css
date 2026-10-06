@@ -50,3 +50,37 @@ button,input,select{font:inherit}button{touch-action:manipulation}.hidden{displa
 .ox-phone-guide{display:grid;grid-template-columns:76px 1fr 76px;align-items:center;gap:9px;margin:18px 0;text-align:center}.ox-phone-guide span{font-size:48px;font-weight:1000;padding:18px 6px;border-radius:22px;background:rgba(255,255,255,.08);border:1px solid var(--line2)}.ox-phone-guide b{color:var(--gold2);font-size:16px}.ox-fallback{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-top:14px}.ox-fallback button{min-height:54px}.mode-grid{grid-template-columns:repeat(4,1fr)}
 @media(max-width:1100px){.mode-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:760px){.ox-arena{height:380px}.ox-avatar{font-size:36px}.ox-person{min-width:64px}.ox-fallback{grid-template-columns:1fr 1fr 1fr}.mode-grid{grid-template-columns:1fr}}
+
+
+/* ===== 九宮格答題戰 ===== */
+.ttt-topline{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px}
+.ttt-layout{display:grid;grid-template-columns:minmax(300px,520px) 1fr;gap:24px;align-items:start}
+.ttt-board-wrap{display:flex;flex-direction:column;gap:14px}
+.ttt-board,.ttt-mobile-board{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.ttt-board button{
+  aspect-ratio:1/1;border:2px solid rgba(255,255,255,.2);border-radius:18px;
+  background:rgba(255,255,255,.06);font-size:clamp(34px,5vw,72px);font-weight:900;color:#fff;
+  pointer-events:none;
+}
+.ttt-board button.team-a,.ttt-mobile-board button.team-a{background:rgba(53,170,255,.18)}
+.ttt-board button.team-b,.ttt-mobile-board button.team-b{background:rgba(255,85,120,.18)}
+.ttt-board button.winning{outline:4px solid #ffd86b;box-shadow:0 0 28px rgba(255,216,107,.45);transform:scale(1.03)}
+.ttt-team-key{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:1.05rem}
+.ttt-question-card{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:20px;min-height:360px}
+.ttt-host-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}
+.ttt-host-choices>div{display:flex;gap:10px;align-items:flex-start;background:rgba(255,255,255,.07);padding:12px;border-radius:14px}
+.ttt-host-choices b{display:inline-flex;align-items:center;justify-content:center;min-width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,.14)}
+.ttt-winner{margin-top:20px;padding:22px;text-align:center;font-size:clamp(28px,4vw,52px);font-weight:900;border-radius:18px;background:linear-gradient(135deg,rgba(255,214,102,.25),rgba(255,255,255,.08));border:2px solid rgba(255,214,102,.6)}
+
+.ttt-mobile-board{margin:18px 0}
+.ttt-mobile-board button{
+  aspect-ratio:1/1;border:2px solid rgba(255,255,255,.22);border-radius:16px;
+  background:rgba(255,255,255,.08);color:#fff;font-size:30px;font-weight:900;
+}
+.ttt-mobile-board button:disabled{opacity:.62}
+.ttt-mobile-board button:not(:disabled){box-shadow:0 0 0 2px rgba(255,216,107,.25) inset}
+#tttBuzzBtn{font-size:26px;padding:22px;margin:18px 0;animation:tttPulse .8s infinite alternate}
+@keyframes tttPulse{from{transform:scale(1)}to{transform:scale(1.025)}}
+@media(max-width:900px){.ttt-layout{grid-template-columns:1fr}.ttt-question-card{min-height:unset}}
+
+.ttt-board button.ttt-selected{outline:4px solid rgba(255,255,255,.8);box-shadow:0 0 22px rgba(255,255,255,.28)}

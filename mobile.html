@@ -4,4 +4,26 @@
 <section id="waiting" class="glass mobile-card hidden"><div class="big-icon">🎈</div><h1>加入成功</h1><h2 id="welcome"></h2><p id="myTeam" class="team-tag hidden"></p><p id="waitText" class="muted">等待主持人開始。</p></section>
 <section id="vote" class="mobile-card hidden"><div class="glass"><div id="mobileProgress" class="muted"></div><div id="mobileTimer" class="mobile-timer">⏱ 30 秒</div><h2 id="mobileQuestion"></h2><div class="mobile-choice-grid"><button id="voteA" class="mobile-choice choice-a">A</button><button id="voteB" class="mobile-choice choice-b">B</button><button id="voteC" class="mobile-choice choice-c">C</button><button id="voteD" class="mobile-choice choice-d">D</button></div><div id="voteMsg" class="status">請選擇答案</div><div id="mobileReference" class="scripture-ref hidden"></div></div></section>
 <section id="ox" class="mobile-card hidden"><div class="glass"><div id="oxMobileProgress" class="muted"></div><div id="oxMobileTimer" class="mobile-timer">⏱ 8 秒</div><h2 id="oxMobileQuestion"></h2><div class="ox-phone-guide"><span id="phoneLeftLabel">O</span><b>← 傾斜手機 →</b><span id="phoneRightLabel">X</span></div><div id="motionMsg" class="status">先按「啟用動作控制」</div><button id="enableMotionBtn" class="primary full">📱 啟用動作控制</button><div class="ox-fallback"><button id="moveLeftBtn" class="secondary">← 左移</button><button id="stopMoveBtn" class="secondary">停止</button><button id="moveRightBtn" class="secondary">右移 →</button></div><div id="oxMobileReference" class="scripture-ref hidden"></div></div></section>
+<section id="ttt" class="mobile-card hidden">
+<div class="glass">
+  <div id="tttMobilePhase" class="muted"></div>
+  <h2 id="tttMobileTitle">九宮格答題戰</h2>
+  <div id="tttMobileBoard" class="ttt-mobile-board">
+    <button data-cell="0">1</button><button data-cell="1">2</button><button data-cell="2">3</button>
+    <button data-cell="3">4</button><button data-cell="4">5</button><button data-cell="5">6</button>
+    <button data-cell="6">7</button><button data-cell="7">8</button><button data-cell="8">9</button>
+  </div>
+  <div id="tttMobileQuestionBox" class="hidden">
+    <h2 id="tttMobileQuestion"></h2>
+    <div class="mobile-choice-grid">
+      <button id="tttVoteA" class="mobile-choice choice-a">A</button>
+      <button id="tttVoteB" class="mobile-choice choice-b">B</button>
+      <button id="tttVoteC" class="mobile-choice choice-c">C</button>
+      <button id="tttVoteD" class="mobile-choice choice-d">D</button>
+    </div>
+  </div>
+  <button id="tttBuzzBtn" class="primary full hidden">🔴 搶答！</button>
+  <div id="tttMobileMsg" class="status">等待遊戲開始</div>
+</div>
+</section>
 <section id="end" class="glass mobile-card hidden"><div class="big-icon">🏆</div><h1>遊戲結束</h1><h2 id="myScore"></h2><p id="teamResult" class="team-tag hidden"></p><p class="muted">請看大螢幕最終排行榜。</p></section></main><script type="module" src="./mobile.js"></script></body></html>

@@ -37,6 +37,10 @@
           <span class="mode-icon">🕹️</span><b>OX 走位搶答</b>
           <small>手機左右傾斜控制小人物走進 O／X 區；O、X 每題可能換邊</small>
         </button>
+        <button class="mode-card" data-mode="ttt">
+          <span class="mode-icon">⭕❌</span><b>九宮格答題戰</b>
+          <small>A／B 兩隊輪流攻格；隨機抽隊員選格，答錯可由對方接答，平手進入搶答決勝</small>
+        </button>
       </div>
     </section>
 
@@ -130,6 +134,54 @@
       <div class="button-row center">
         <button id="revealBtn" class="primary">公布答案</button>
         <button id="nextBtn" class="primary hidden">下一題 ▶</button>
+      </div>
+    </section>
+
+
+    <section id="tttGame" class="glass hidden">
+      <div class="ttt-topline">
+        <div>
+          <div class="eyebrow">⭕❌ TIC-TAC-TOE BIBLE BATTLE</div>
+          <h2 id="tttTurnTitle">準備開始</h2>
+          <div id="tttPickerText" class="muted"></div>
+        </div>
+        <div id="tttPhaseBadge" class="badge">等待</div>
+      </div>
+
+      <div class="ttt-layout">
+        <div class="ttt-board-wrap">
+          <div id="tttBoard" class="ttt-board">
+            <button data-cell="0"></button><button data-cell="1"></button><button data-cell="2"></button>
+            <button data-cell="3"></button><button data-cell="4"></button><button data-cell="5"></button>
+            <button data-cell="6"></button><button data-cell="7"></button><button data-cell="8"></button>
+          </div>
+          <div class="ttt-team-key">
+            <span><b id="tttAName">A隊</b> = ⭕</span>
+            <span><b id="tttBName">B隊</b> = ❌</span>
+          </div>
+        </div>
+
+        <div class="ttt-question-card">
+          <div id="tttQuestionNo" class="muted"></div>
+          <h2 id="tttQuestionText">等待選格</h2>
+          <div id="tttChoices" class="ttt-host-choices hidden">
+            <div><b>A</b><span id="tttA"></span></div>
+            <div><b>B</b><span id="tttB"></span></div>
+            <div><b>C</b><span id="tttC"></span></div>
+            <div><b>D</b><span id="tttD"></span></div>
+          </div>
+          <div id="tttStatus" class="status">等待玩家操作</div>
+          <div id="tttAnswerPanel" class="answer-panel hidden">
+            <div id="tttCorrectAnswer" class="correct-answer"></div>
+            <div id="tttReference" class="scripture-ref"></div>
+            <div id="tttExplanation" class="muted"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tttWinnerBanner" class="ttt-winner hidden"></div>
+      <div class="button-row center">
+        <button id="tttBackLobbyBtn" class="secondary hidden">返回等待區</button>
       </div>
     </section>
 

@@ -1,8 +1,8 @@
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-import { getDatabase, ref, set, onValue, get, onDisconnect } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+import { getDatabase, ref, set, update, onValue, get, onDisconnect, runTransaction } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
 
-const app=getApps().length?getApp():initializeApp(firebaseConfig),db=getDatabase(app),$=s=>document.querySelector(s);
+const app=getApps().length?getApp():initializeApp(firebaseConfig),db=getDatabase(app),$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const roomId=new URLSearchParams(location.search).get("room");
 if(!roomId){document.body.innerHTML='<main class="glass mobile-card"><h2>找不到房號</h2><p>請重新掃描大螢幕上的 QR Code。</p></main>';throw new Error("Missing room")}
 
@@ -13,7 +13,7 @@ let selectedTeam=sessionStorage.getItem(`bible_team_${roomId}`)||null;
 let roomMode="online",teamNames={A:"A隊",B:"B隊"},currentIndex=-1,votedIndex=null,timerId=null;
 let motionEnabled=false,lastDir="stop",lastSentAt=0;
 
-const show=id=>["join","waiting","vote","ox","end"].forEach(x=>$("#"+x).classList.toggle("hidden",x!==id));
+const show=id=>["join","waiting","vote","ox","ttt","end"].forEach(x=>$("#"+x).classList.toggle("hidden",x!==id));
 const makeId=()=>crypto?.randomUUID?crypto.randomUUID():`p_${Date.now()}_${Math.random().toString(36).slice(2,9)}`;
 
 $("#joinBtn").addEventListener("click",joinGame);
@@ -21,6 +21,9 @@ $("#nameInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefa
 $("#pickA").addEventListener("click",()=>pickTeam("A"));
 $("#pickB").addEventListener("click",()=>pickTeam("B"));
 ["A","B","C","D"].forEach(k=>$("#vote"+k).addEventListener("click",()=>cast(k)));
+["A","B","C","D"].forEach(k=>$("#tttVote"+k)?.addEventListener("click",()=>submitTttAnswer(k)));
+$("#tttBuzzBtn")?.addEventListener("click",submitTttBuzz);
+$$("#tttMobileBoard button").forEach(b=>b.addEventListener("click",()=>selectTttCell(Number(b.dataset.cell))));
 $("#enableMotionBtn").addEventListener("click",enableMotion);
 $("#moveLeftBtn").addEventListener("pointerdown",()=>sendDir("left",true));
 $("#moveRightBtn").addEventListener("pointerdown",()=>sendDir("right",true));
@@ -29,9 +32,9 @@ $("#stopMoveBtn").addEventListener("click",()=>sendDir("stop",true));
 
 function pickTeam(t){selectedTeam=t;sessionStorage.setItem(`bible_team_${roomId}`,t);$("#pickA").classList.toggle("active",t==="A");$("#pickB").classList.toggle("active",t==="B");}
 function refreshModeUi(){
-  const team=roomMode==="team",ox=roomMode==="ox";
+  const team=roomMode==="team"||roomMode==="ttt",ox=roomMode==="ox";
   $("#teamPicker").classList.toggle("hidden",!team);
-  $("#modeHint").textContent=team?"⚔️ 這是兩隊競賽：輸入名字後選擇隊伍。":ox?"🕹️ 這是 OX 走位搶答：加入後用手機傾斜控制小人物。":"📱 這是手機多人模式：輸入名字後加入個人競賽。";
+  $("#modeHint").textContent=roomMode==="team"?"⚔️ 這是兩隊競賽：輸入名字後選擇隊伍。":roomMode==="ttt"?"⭕❌ 九宮格答題戰：先選 A隊／B隊；每回合系統會隨機抽一人選格。":ox?"🕹️ 這是 OX 走位搶答：加入後用手機傾斜控制小人物。":"📱 這是手機多人模式：輸入名字後加入個人競賽。";
   $("#pickA").textContent=teamNames.A||"A隊";$("#pickB").textContent=teamNames.B||"B隊";
   if(selectedTeam)pickTeam(selectedTeam);
   $("#myTeam").classList.toggle("hidden",!team);
@@ -45,11 +48,11 @@ async function joinGame(){
   if(!m.exists()){$("#joinMsg").textContent="房間不存在";return}
   const meta=m.val();roomMode=meta.mode||"online";teamNames=meta.teamNames||teamNames;refreshModeUi();
   if(meta.status!=="waiting"){$("#joinMsg").textContent="這局已開始，請等待下一局";return}
-  if(roomMode==="team"&&!selectedTeam){$("#joinMsg").textContent="請先選擇 A隊或 B隊";return}
+  if((roomMode==="team"||roomMode==="ttt")&&!selectedTeam){$("#joinMsg").textContent="請先選擇 A隊或 B隊";return}
   playerId=makeId();playerName=name;
   sessionStorage.setItem(`bible_player_${roomId}`,playerId);sessionStorage.setItem(`bible_name_${roomId}`,playerName);
   const pr=ref(db,`rooms/${roomId}/players/${playerId}`);
-  await set(pr,{name:playerName,score:0,team:roomMode==="team"?selectedTeam:null,joinedAt:Date.now()});
+  await set(pr,{name:playerName,score:0,team:(roomMode==="team"||roomMode==="ttt")?selectedTeam:null,joinedAt:Date.now()});
   onDisconnect(pr).remove();
   $("#welcome").textContent=`歡迎 ${playerName}`;refreshModeUi();show("waiting");
 }
@@ -64,16 +67,138 @@ onValue(ref(db,`rooms/${roomId}/meta`),async s=>{
     show("waiting");return;
   }
   if(["playing","revealed"].includes(m.status)){
-    currentIndex=Number(m.currentIndex);if(roomMode==="ox")await renderOx(m);else await renderVote(m);return;
+    currentIndex=Number(m.currentIndex);
+    if(roomMode==="ox")await renderOx(m);
+    else if(roomMode==="ttt")await renderTttMobile(m);
+    else await renderVote(m);
+    return;
   }
   if(m.status==="ended"){
     clearTimer();const p=(await get(ref(db,`rooms/${roomId}/players/${playerId}`))).val();
     $("#myScore").textContent=p?`${p.score||0} 分`:"遊戲結束";
-    if(roomMode==="team"&&p?.team){$("#teamResult").classList.remove("hidden");$("#teamResult").textContent=`${teamNames[p.team]||p.team}｜個人累積 ${p.score||0} 分`;}else $("#teamResult").classList.add("hidden");
+    if((roomMode==="team"||roomMode==="ttt")&&p?.team){$("#teamResult").classList.remove("hidden");$("#teamResult").textContent=`${teamNames[p.team]||p.team}｜個人累積 ${p.score||0} 分`;}else $("#teamResult").classList.add("hidden");
     show("end");
   }
 });
 
+
+async function renderTttMobile(m){
+  clearTimer();
+  const t=m.ttt||{};
+  const board=Array.from({length:9},(_,i)=>t.board?.[`c${i}`]||"");
+  const names=m.teamNames||{A:"A隊",B:"B隊"};
+  const phase=t.phase||"pick";
+  const isPicker=phase==="pick"&&t.pickerId===playerId&&t.turnTeam===selectedTeam;
+
+  $("#tttMobilePhase").textContent=`${names.A||"A隊"} = ⭕　｜　${names.B||"B隊"} = ❌`;
+  $("#tttBuzzBtn").classList.add("hidden");
+  $("#tttMobileQuestionBox").classList.add("hidden");
+
+  $$("#tttMobileBoard button").forEach((b,i)=>{
+    const v=board[i];
+    b.textContent=v==="A"?"⭕":v==="B"?"❌":String(i+1);
+    b.disabled=!!v||!isPicker;
+    b.classList.toggle("team-a",v==="A");
+    b.classList.toggle("team-b",v==="B");
+  });
+
+  if(phase==="pick"){
+    if(isPicker){
+      $("#tttMobileTitle").textContent="🎲 你被抽中了！請選一格";
+      $("#tttMobileMsg").textContent="只能選目前空白的格子；之前雙方都答錯的空格也可以再次攻擊。";
+    }else if(t.turnTeam===selectedTeam){
+      $("#tttMobileTitle").textContent=`輪到 ${names[selectedTeam]||selectedTeam}`;
+      $("#tttMobileMsg").textContent=`本回合由 ${t.pickerName||"隊友"} 選格，請等待。`;
+    }else{
+      $("#tttMobileTitle").textContent=`目前是 ${names[t.turnTeam]||t.turnTeam} 回合`;
+      $("#tttMobileMsg").textContent="等待對方選格。";
+    }
+    show("ttt"); return;
+  }
+
+  if(phase==="won"){
+    $("#tttMobileTitle").textContent=t.winner===selectedTeam?"🏆 你們隊獲勝！":"本局結束";
+    $("#tttMobileMsg").textContent=`勝隊：${names[t.winner]||t.winner}`;
+    show("ttt"); return;
+  }
+
+  if(phase==="tiebreakBuzz"){
+    $("#tttMobileTitle").textContent="⚡ 平手搶答決勝";
+    $("#tttMobileMsg").textContent="看到按鈕就搶！最快的人先回答。";
+    $("#tttBuzzBtn").classList.remove("hidden");
+    $("#tttBuzzBtn").disabled=false;
+    show("ttt"); return;
+  }
+
+  const qi=Number(t.questionIndex||0);
+  const q=(await get(ref(db,`rooms/${roomId}/questions/${qi}`))).val();
+  if(!q){$("#tttMobileTitle").textContent="找不到題目";show("ttt");return;}
+  $("#tttMobileQuestion").textContent=q.question;
+  ["A","B","C","D"].forEach((k,i)=>{
+    const b=$("#tttVote"+k);
+    b.textContent=`${k}\n${q.choices?.[i]||""}`;
+    b.disabled=true;
+  });
+  $("#tttMobileQuestionBox").classList.remove("hidden");
+
+  let canAnswer=false;
+  if(["answer","steal"].includes(phase)){
+    canAnswer=t.answeringTeam===selectedTeam;
+  }else if(phase==="tiebreakAnswer"){
+    canAnswer=t.answeringTeam===selectedTeam && (t.tiebreakSecondChance||!t.buzzPlayerId||t.buzzPlayerId===playerId);
+  }
+  ["A","B","C","D"].forEach(k=>$("#tttVote"+k).disabled=!canAnswer);
+
+  if(phase==="answer"){
+    $("#tttMobileTitle").textContent=`攻擊第 ${Number(t.selectedCell)+1} 格`;
+    $("#tttMobileMsg").textContent=canAnswer?"你們隊先答；第一個送出的答案會被採用。":"等待對方隊伍作答。";
+  }else if(phase==="steal"){
+    $("#tttMobileTitle").textContent="🔥 接答搶格";
+    $("#tttMobileMsg").textContent=canAnswer?"對方答錯了！你們隊答對就能搶走這格。":"你們隊已答錯，等待對方接答。";
+  }else if(phase==="tiebreakAnswer"){
+    $("#tttMobileTitle").textContent=t.tiebreakSecondChance?"接答機會":"⚡ 搶答成功";
+    $("#tttMobileMsg").textContent=canAnswer?(t.tiebreakSecondChance?"對方搶答答錯，換你們隊回答。":"你搶到了！請回答 A/B/C/D。"):"等待有回答權的玩家作答。";
+  }
+  show("ttt");
+}
+async function selectTttCell(cell){
+  const ms=(await get(ref(db,`rooms/${roomId}/meta`))).val();
+  const t=ms?.ttt||{};
+  if(ms?.mode!=="ttt"||ms.status!=="playing"||t.phase!=="pick"||t.pickerId!==playerId||t.turnTeam!==selectedTeam)return;
+  if(t.board?.[`c${cell}`])return;
+  await update(ref(db,`rooms/${roomId}/meta`),{
+    "ttt/selectedCell":cell,
+    "ttt/attackingTeam":selectedTeam,
+    "ttt/answeringTeam":selectedTeam,
+    "ttt/phase":"answer",
+    "ttt/feedback":""
+  });
+}
+async function submitTttAnswer(choice){
+  const ms=(await get(ref(db,`rooms/${roomId}/meta`))).val();
+  const t=ms?.ttt||{};
+  if(ms?.mode!=="ttt"||ms.status!=="playing"||!["answer","steal","tiebreakAnswer"].includes(t.phase))return;
+  if(t.answeringTeam!==selectedTeam)return;
+  if(t.phase==="tiebreakAnswer"&&!t.tiebreakSecondChance&&t.buzzPlayerId&&t.buzzPlayerId!==playerId)return;
+  const ar=ref(db,`rooms/${roomId}/tttAnswer`);
+  const result=await runTransaction(ar,current=>{
+    if(current)return current;
+    return {team:selectedTeam,choice,playerId,name:playerName,at:Date.now()};
+  });
+  if(result.committed)$("#tttMobileMsg").textContent=`✅ 已送出 ${choice}，等待主機判定`;
+}
+async function submitTttBuzz(){
+  const ms=(await get(ref(db,`rooms/${roomId}/meta`))).val();
+  const t=ms?.ttt||{};
+  if(ms?.mode!=="ttt"||ms.status!=="playing"||t.phase!=="tiebreakBuzz")return;
+  const br=ref(db,`rooms/${roomId}/tttBuzz`);
+  const result=await runTransaction(br,current=>{
+    if(current)return current;
+    return {team:selectedTeam,playerId,name:playerName,at:Date.now()};
+  });
+  $("#tttBuzzBtn").disabled=true;
+  $("#tttMobileMsg").textContent=result.committed?"⚡ 你搶到了！等待主機開放作答。":"差一點！已經有人先搶到了。";
+}
 async function renderOx(m){
   clearTimer();const q=(await get(ref(db,`rooms/${roomId}/questions/${currentIndex}`))).val();if(!q)return;
   $("#oxMobileProgress").textContent=`第 ${currentIndex+1} / ${m.questionCount} 題`;

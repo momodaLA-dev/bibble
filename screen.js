@@ -20,14 +20,16 @@ let oxPositions = {};
 let oxMoveTimer = null;
 let oxQuestionIndex = -1;
 let networkRevealInFlight = false;
+let tttResolving = false;
+let tttBuzzResolving = false;
 
-const sections = ["home","onlineLobby","setup","game","ranking"];
+const sections = ["home","onlineLobby","setup","game","tttGame","ranking"];
 function show(id){
   sections.forEach(x=>$("#"+x).classList.toggle("hidden",x!==id));
   $("#homeBtn").classList.toggle("hidden",id==="home");
 }
 function currentSettings(){return {testament:$("#testamentSelect").value,book:$("#bookSelect").value,difficulty:$("#difficultySelect").value};}
-function isNetworkMode(){return mode==="team"||mode==="online"||mode==="ox";}
+function isNetworkMode(){return mode==="team"||mode==="online"||mode==="ox"||mode==="ttt";}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 
 $$('.mode-card').forEach(btn=>btn.addEventListener('click',()=>selectMode(btn.dataset.mode)));
@@ -57,16 +59,16 @@ async function selectMode(nextMode){
 }
 
 function updateLobbyLabels(){
-  const team = mode==="team";
-  $("#lobbyModeLabel").textContent=team?"⚔️ 兩隊競賽":mode==="ox"?"🕹️ OX 走位搶答":"📱 手機多人模式";
-  $("#waitingTitle").textContent=team?"兩隊等待區":mode==="ox"?"OX 玩家等待區":"玩家等待區";
+  const team = mode==="team"||mode==="ttt";
+  $("#lobbyModeLabel").textContent=mode==="team"?"⚔️ 兩隊競賽":mode==="ox"?"🕹️ OX 走位搶答":mode==="ttt"?"⭕❌ 九宮格答題戰":"📱 手機多人模式";
+  $("#waitingTitle").textContent=mode==="team"?"兩隊等待區":mode==="ox"?"OX 玩家等待區":mode==="ttt"?"九宮格兩隊等待區":"玩家等待區";
   $("#teamLobbySummary").classList.toggle("hidden",!team);
 }
 
 function openSetup(){
   show("setup");
-  $("#setupTitle").textContent=mode==="solo"?"👤 單人競技設定":mode==="team"?"⚔️ 兩隊競賽設定":mode==="ox"?"🕹️ OX 走位搶答設定":"📱 手機多人設定";
-  $("#teamNames").classList.toggle("hidden",mode!=="team");
+  $("#setupTitle").textContent=mode==="solo"?"👤 單人競技設定":mode==="team"?"⚔️ 兩隊競賽設定":mode==="ox"?"🕹️ OX 走位搶答設定":mode==="ttt"?"⭕❌ 九宮格答題戰設定":"📱 手機多人設定";
+  $("#teamNames").classList.toggle("hidden",!(mode==="team"||mode==="ttt"));
   refreshBooks();
   refreshAvailability();
 }
@@ -87,7 +89,7 @@ function refreshAvailability(){
 }
 
 async function syncTeamNamesToRoom(){
-  if(mode!=="team"||!networkApi)return;
+  if(!(mode==="team"||mode==="ttt")||!networkApi)return;
   const names={A:$("#teamAName").value.trim()||"A隊",B:$("#teamBName").value.trim()||"B隊"};
   $("#lobbyTeamAName").textContent=names.A;$("#lobbyTeamBName").textContent=names.B;
   await networkApi.setTeamNames?.(names);
@@ -111,7 +113,7 @@ function makeOxQuestions(source){
 function currentRoundSeconds(){return mode==="ox"?OX_SECONDS:QUESTION_SECONDS;}
 function startConfiguredGame(){
   const count=Number($("#countSelect").value);
-  questions=buildQuestionSet(currentSettings(),count);
+  questions=buildQuestionSet(currentSettings(),mode==="ttt"?Math.max(30,count):count);
   if(mode==="ox")questions=makeOxQuestions(questions);
   if(!questions.length)return;
   currentIndex=0;soloScore=0;
@@ -188,7 +190,7 @@ async function ensureNetworkMode(requestedMode){
     let roomId=params.get("room")||randomRoom();
     if(!params.get("room")){const u=new URL(location.href);u.searchParams.set("room",roomId);history.replaceState({},"",u)}
     $("#roomCode").textContent=roomId;
-    const roomRef=ref(db,`rooms/${roomId}`),metaRef=ref(db,`rooms/${roomId}/meta`),playersRef=ref(db,`rooms/${roomId}/players`),votesRoot=ref(db,`rooms/${roomId}/votes`),controlsRef=ref(db,`rooms/${roomId}/controls`);
+    const roomRef=ref(db,`rooms/${roomId}`),metaRef=ref(db,`rooms/${roomId}/meta`),playersRef=ref(db,`rooms/${roomId}/players`),votesRoot=ref(db,`rooms/${roomId}/votes`),controlsRef=ref(db,`rooms/${roomId}/controls`),tttAnswerRef=ref(db,`rooms/${roomId}/tttAnswer`),tttBuzzRef=ref(db,`rooms/${roomId}/tttBuzz`);
     if(!(await get(metaRef)).exists())await set(metaRef,{status:"waiting",mode:requestedMode,questionCount:0,currentIndex:-1,roundEndsAt:0,teamNames:{A:"A隊",B:"B隊"},createdAt:Date.now()});
     else await update(metaRef,{mode:requestedMode,status:"waiting"});
 
@@ -207,15 +209,31 @@ async function ensureNetworkMode(requestedMode){
       $("#lobbyTeamAName").textContent=names.A||"A隊";$("#lobbyTeamBName").textContent=names.B||"B隊";
       if(m.status==="waiting"){if(!["setup","home"].some(id=>!$("#"+id).classList.contains("hidden")))show("onlineLobby");return;}
       if(m.status==="playing"||m.status==="revealed"){
-        show("game");currentIndex=Number(m.currentIndex);
         questions=Object.values((await get(ref(db,`rooms/${roomId}/questions`))).val()||{});
+        if(mode==="ttt"){
+          show("tttGame");
+          await renderTttHost(db,ref,get,roomId,m);
+          return;
+        }
+        show("game");currentIndex=Number(m.currentIndex);
         await renderNetworkQuestion(db,ref,get,roomId,m);
         return;
       }
-      if(m.status==="ended")renderNetworkRanking();
+      if(m.status==="ended"){
+        if(mode==="ttt"){show("tttGame");await renderTttHost(db,ref,get,roomId,m);return;}
+        renderNetworkRanking();
+      }
     });
     const unVotes=onValue(votesRoot,()=>{if(isNetworkMode()&&["playing","revealed"].includes(networkState.meta.status)&&mode!=="ox")renderNetworkVotes(db,ref,get,roomId);});
     const unControls=onValue(controlsRef,s=>{networkState.controls=s.val()||{};});
+    const unTttAnswer=onValue(tttAnswerRef,s=>{
+      const ans=s.val();
+      if(mode==="ttt"&&ans&&!tttResolving)resolveTttAnswer(db,ref,get,update,set,roomId,roomRef,metaRef,tttAnswerRef,ans);
+    });
+    const unTttBuzz=onValue(tttBuzzRef,s=>{
+      const buzz=s.val();
+      if(mode==="ttt"&&buzz&&!tttBuzzResolving)resolveTttBuzz(get,update,set,metaRef,tttBuzzRef,tttAnswerRef,buzz);
+    });
 
     $("#onlineSetupBtn").onclick=openSetup;
     $("#newRoomBtn").onclick=()=>location.href=`${basePath()}index.html?room=${randomRoom()}`;
@@ -224,12 +242,33 @@ async function ensureNetworkMode(requestedMode){
       async setMode(next){mode=next;await update(metaRef,{mode:next,status:"waiting"});},
       async setTeamNames(names){await update(metaRef,{teamNames:names});},
       async startGame({questions:qs,settings,teamNames}){
+        if(mode==="ttt"){
+          const hasA=Object.values(networkState.players||{}).some(p=>p.team==="A");
+          const hasB=Object.values(networkState.players||{}).some(p=>p.team==="B");
+          if(!hasA||!hasB){alert("九宮格答題戰需要 A隊、B隊至少各 1 位玩家。");return;}
+        }
         const u={};
         qs.forEach((q,i)=>u[`questions/${i}`]=q);
         u.votes=null;
         u.controls=null;
+        u.tttAnswer=null;
+        u.tttBuzz=null;
         Object.entries(networkState.players).forEach(([id])=>u[`players/${id}/score`]=0);
-        u.meta={status:"playing",mode,questionCount:qs.length,currentIndex:0,roundEndsAt:Date.now()+currentRoundSeconds()*1000,settings,teamNames:mode==="team"?teamNames:{A:"A隊",B:"B隊"},createdAt:networkState.meta.createdAt||Date.now()};
+        if(mode==="ttt"){
+          const picker=pickRandomTeamPlayer("A");
+          u.meta={
+            status:"playing",mode,questionCount:qs.length,currentIndex:0,roundEndsAt:0,settings,
+            teamNames,createdAt:networkState.meta.createdAt||Date.now(),
+            ttt:{
+              board:{c0:"",c1:"",c2:"",c3:"",c4:"",c5:"",c6:"",c7:"",c8:""},
+              turnTeam:"A",attackingTeam:"A",answeringTeam:"A",phase:"pick",
+              pickerId:picker?.id||"",pickerName:picker?.name||"等待 A隊玩家",
+              selectedCell:-1,questionIndex:0,winner:"",feedback:"A隊先攻"
+            }
+          };
+        }else{
+          u.meta={status:"playing",mode,questionCount:qs.length,currentIndex:0,roundEndsAt:Date.now()+currentRoundSeconds()*1000,settings,teamNames:mode==="team"?teamNames:{A:"A隊",B:"B隊"},createdAt:networkState.meta.createdAt||Date.now()};
+        }
         await update(roomRef,u);
       },
       async reveal(){await revealNetwork(db,ref,get,update,roomId,roomRef);},
@@ -240,18 +279,237 @@ async function ensureNetworkMode(requestedMode){
         else await update(metaRef,{status:"playing",currentIndex:n,roundEndsAt:Date.now()+currentRoundSeconds()*1000});
       },
       async restart(){
-        const u={votes:null,questions:null};
+        const u={votes:null,questions:null,tttAnswer:null,tttBuzz:null};
         Object.entries(networkState.players).forEach(([id])=>u[`players/${id}/score`]=0);
         u["meta/status"]="waiting";u["meta/currentIndex"]=-1;u["meta/questionCount"]=0;u["meta/roundEndsAt"]=0;
         await update(roomRef,u);show("onlineLobby");
       },
-      stop(){unPlayers();unMeta();unVotes();unControls();stopOxMovement();}
+      stop(){unPlayers();unMeta();unVotes();unControls();unTttAnswer();unTttBuzz();stopOxMovement();}
     };
   }catch(err){
     $("#onlineLobby").innerHTML=`<div class="glass"><h2>無法啟動連線模式</h2><p class="muted">請確認網路連線與 Firebase 設定。單人競技仍可直接使用。</p><pre>${escapeHtml(err.message)}</pre></div>`;
   }
 }
 
+
+function otherTeam(t){return t==="A"?"B":"A";}
+function teamName(t){const n=networkState.meta?.teamNames||{A:"A隊",B:"B隊"};return n[t]||`${t}隊`;}
+function pickRandomTeamPlayer(team){
+  const arr=Object.entries(networkState.players||{}).filter(([,p])=>p.team===team).map(([id,p])=>({id,name:p.name||"玩家"}));
+  return arr.length?arr[Math.floor(Math.random()*arr.length)]:null;
+}
+function tttBoardFrom(meta){
+  const b=meta?.ttt?.board||{};
+  return Array.from({length:9},(_,i)=>b[`c${i}`]||"");
+}
+function tttWinner(board){
+  const lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  for(const line of lines){
+    const v=board[line[0]];
+    if(v&&line.every(i=>board[i]===v))return {team:v,line};
+  }
+  return null;
+}
+function setTttBoardVisual(board,winLine=[]){
+  $$("#tttBoard button").forEach((b,i)=>{
+    const v=board[i];
+    b.textContent=v==="A"?"⭕":v==="B"?"❌":String(i+1);
+    b.classList.toggle("team-a",v==="A");
+    b.classList.toggle("team-b",v==="B");
+    b.classList.toggle("winning",winLine.includes(i));
+  });
+}
+async function renderTttHost(db,ref,get,roomId,m){
+  const t=m.ttt||{};
+  const board=tttBoardFrom(m);
+  const win=tttWinner(board);
+  setTttBoardVisual(board,win?.line||[]);
+  if(Number(t.selectedCell)>=0&&["answer","steal"].includes(t.phase||"")){
+    $(`#tttBoard button[data-cell="${Number(t.selectedCell)}"]`)?.classList.add("ttt-selected");
+  }
+  $("#tttAName").textContent=(m.teamNames?.A||"A隊");
+  $("#tttBName").textContent=(m.teamNames?.B||"B隊");
+  $("#tttWinnerBanner").classList.add("hidden");
+  $("#tttBackLobbyBtn").classList.add("hidden");
+  $("#tttAnswerPanel").classList.add("hidden");
+  $("#tttChoices").classList.add("hidden");
+
+  const phase=t.phase||"pick";
+  const attack=t.attackingTeam||t.turnTeam||"A";
+  const answerTeam=t.answeringTeam||attack;
+  const picker=t.pickerName||"";
+  const names=m.teamNames||{A:"A隊",B:"B隊"};
+
+  if(phase==="pick"){
+    $("#tttPhaseBadge").textContent="選格";
+    $("#tttTurnTitle").textContent=`${names[t.turnTeam]||t.turnTeam} 回合`;
+    $("#tttPickerText").textContent=picker?`🎲 本回合隨機選格者：${picker}`:"等待該隊玩家加入";
+    $("#tttQuestionNo").textContent="";
+    $("#tttQuestionText").textContent="請看手機，由被抽中的隊員選擇要攻擊的空格。";
+    $("#tttStatus").textContent="空格若之前雙方都答錯，可以再次選擇進攻。";
+    if(t.feedback){
+      $("#tttAnswerPanel").classList.remove("hidden");
+      $("#tttCorrectAnswer").textContent=t.feedback;
+      $("#tttReference").textContent=t.lastReference?`📖 ${t.lastReference}`:"";
+      $("#tttExplanation").textContent=t.lastExplanation||"";
+    }
+    return;
+  }
+
+  if(phase==="won"){
+    const winner=t.winner||win?.team;
+    $("#tttPhaseBadge").textContent="勝利";
+    $("#tttTurnTitle").textContent="遊戲結束";
+    $("#tttPickerText").textContent="";
+    $("#tttQuestionText").textContent="";
+    $("#tttStatus").textContent="已完成三格連線！";
+    $("#tttWinnerBanner").textContent=`🏆 ${names[winner]||winner} 獲勝！`;
+    $("#tttWinnerBanner").classList.remove("hidden");
+    $("#tttBackLobbyBtn").classList.remove("hidden");
+    return;
+  }
+
+  if(phase==="tiebreakBuzz"){
+    $("#tttPhaseBadge").textContent="平手搶答";
+    $("#tttTurnTitle").textContent="⚡ 九宮格平手！進入搶答決勝";
+    $("#tttPickerText").textContent="兩隊手機都會出現「搶答」按鈕";
+    $("#tttQuestionText").textContent="先搶到的玩家取得第一回答權。";
+    $("#tttStatus").textContent="若第一隊答錯，回答權直接交給另一隊。";
+    return;
+  }
+
+  const qi=Number(t.questionIndex||0);
+  const q=(await get(ref(db,`rooms/${roomId}/questions/${qi}`))).val();
+  if(!q){
+    $("#tttQuestionText").textContent="題庫不足，請重新開始並選擇有足夠題目的範圍。";
+    return;
+  }
+  $("#tttQuestionNo").textContent=`題庫題號 ${qi+1}`;
+  $("#tttQuestionText").textContent=q.question;
+  ["A","B","C","D"].forEach((k,i)=>$("#ttt"+k).textContent=q.choices?.[i]||"");
+  $("#tttChoices").classList.remove("hidden");
+
+  if(phase==="answer"){
+    $("#tttPhaseBadge").textContent="攻格答題";
+    $("#tttTurnTitle").textContent=`${names[attack]||attack} 攻擊第 ${Number(t.selectedCell)+1} 格`;
+    $("#tttPickerText").textContent=`由 ${names[attack]||attack} 先回答`;
+    $("#tttStatus").textContent=`${names[answerTeam]||answerTeam} 作答中；該隊第一個送出的答案會被採用。`;
+  }else if(phase==="steal"){
+    $("#tttPhaseBadge").textContent="接答反攻";
+    $("#tttTurnTitle").textContent=`${names[attack]||attack} 答錯，${names[answerTeam]||answerTeam} 接答！`;
+    $("#tttPickerText").textContent=`答對可直接搶走第 ${Number(t.selectedCell)+1} 格`;
+    $("#tttStatus").textContent=`${names[answerTeam]||answerTeam} 作答中。`;
+  }else if(phase==="tiebreakAnswer"){
+    $("#tttPhaseBadge").textContent="搶答作答";
+    $("#tttTurnTitle").textContent=t.tiebreakSecondChance?`${names[answerTeam]||answerTeam} 接答機會`:`⚡ ${t.buzzPlayerName||"玩家"} 搶到回答權`;
+    $("#tttPickerText").textContent=t.tiebreakSecondChance?"第一隊答錯，改由另一隊回答同一題。":`${names[answerTeam]||answerTeam} 先回答`;
+    $("#tttStatus").textContent=`${names[answerTeam]||answerTeam} 作答中。`;
+  }
+  if(t.feedback){
+    $("#tttAnswerPanel").classList.remove("hidden");
+    $("#tttCorrectAnswer").textContent=t.feedback;
+    $("#tttReference").textContent=t.lastReference?`📖 ${t.lastReference}`:"";
+    $("#tttExplanation").textContent=t.lastExplanation||"";
+  }
+}
+async function resolveTttAnswer(db,ref,get,update,set,roomId,roomRef,metaRef,tttAnswerRef,ans){
+  tttResolving=true;
+  try{
+    const meta=(await get(metaRef)).val()||{};
+    if(meta.mode!=="ttt"||meta.status!=="playing"){await set(tttAnswerRef,null);return;}
+    const t=meta.ttt||{};
+    if(!["answer","steal","tiebreakAnswer"].includes(t.phase)){await set(tttAnswerRef,null);return;}
+    if(ans.team!==t.answeringTeam){await set(tttAnswerRef,null);return;}
+    if(t.phase==="tiebreakAnswer"&&!t.tiebreakSecondChance&&t.buzzPlayerId&&ans.playerId!==t.buzzPlayerId){await set(tttAnswerRef,null);return;}
+
+    const qi=Number(t.questionIndex||0);
+    const q=(await get(ref(db,`rooms/${roomId}/questions/${qi}`))).val();
+    if(!q){await set(tttAnswerRef,null);return;}
+    const correct=ans.choice===q.answer;
+    const names=meta.teamNames||{A:"A隊",B:"B隊"};
+    const feedback=`${correct?"✅":"❌"} ${ans.name||names[ans.team]||ans.team} 回答 ${ans.choice}；正確答案是 ${q.answer}`;
+    const baseUpdates={
+      "ttt/feedback":feedback,
+      "ttt/lastReference":q.reference||"",
+      "ttt/lastExplanation":q.explanation||""
+    };
+
+    if(t.phase==="tiebreakAnswer"){
+      if(correct){
+        await update(metaRef,{...baseUpdates,status:"ended","ttt/phase":"won","ttt/winner":ans.team});
+        await set(tttAnswerRef,null); return;
+      }
+      if(!t.tiebreakSecondChance){
+        await update(metaRef,{...baseUpdates,"ttt/answeringTeam":otherTeam(ans.team),"ttt/tiebreakSecondChance":true});
+        await set(tttAnswerRef,null); return;
+      }
+      const nextQi=(qi+1)%Math.max(1,Number(meta.questionCount||1));
+      await update(metaRef,{...baseUpdates,"ttt/phase":"tiebreakBuzz","ttt/questionIndex":nextQi,"ttt/answeringTeam":"","ttt/buzzPlayerId":"","ttt/buzzPlayerName":"","ttt/tiebreakSecondChance":false});
+      await set(tttAnswerRef,null);
+      await set(ref(db,`rooms/${roomId}/tttBuzz`),null);
+      return;
+    }
+
+    const attack=t.attackingTeam||t.turnTeam;
+    const nextTeam=otherTeam(attack);
+    const board=tttBoardFrom(meta);
+
+    if(correct){
+      board[Number(t.selectedCell)]=ans.team;
+      const win=tttWinner(board);
+      const updates={...baseUpdates};
+      board.forEach((v,i)=>updates[`ttt/board/c${i}`]=v||"");
+      if(win){
+        updates.status="ended";updates["ttt/phase"]="won";updates["ttt/winner"]=win.team;
+        await update(metaRef,updates);await set(tttAnswerRef,null);return;
+      }
+      if(board.every(Boolean)){
+        updates["ttt/phase"]="tiebreakBuzz";updates["ttt/questionIndex"]=(qi+1)%Math.max(1,Number(meta.questionCount||1));
+        updates["ttt/answeringTeam"]="";updates["ttt/buzzPlayerId"]="";updates["ttt/buzzPlayerName"]="";updates["ttt/tiebreakSecondChance"]=false;
+        await update(metaRef,updates);await set(tttAnswerRef,null);await set(ref(db,`rooms/${roomId}/tttBuzz`),null);return;
+      }
+      const picker=pickRandomTeamPlayer(nextTeam);
+      Object.assign(updates,{
+        "ttt/phase":"pick","ttt/turnTeam":nextTeam,"ttt/attackingTeam":nextTeam,"ttt/answeringTeam":nextTeam,
+        "ttt/pickerId":picker?.id||"","ttt/pickerName":picker?.name||`等待 ${names[nextTeam]||nextTeam} 玩家`,
+        "ttt/selectedCell":-1,"ttt/questionIndex":(qi+1)%Math.max(1,Number(meta.questionCount||1))
+      });
+      await update(metaRef,updates);await set(tttAnswerRef,null);return;
+    }
+
+    if(t.phase==="answer"){
+      await update(metaRef,{...baseUpdates,"ttt/phase":"steal","ttt/answeringTeam":otherTeam(attack)});
+      await set(tttAnswerRef,null);return;
+    }
+
+    // steal also wrong -> cell remains empty and opponent gets next formal turn
+    const picker=pickRandomTeamPlayer(nextTeam);
+    await update(metaRef,{...baseUpdates,
+      "ttt/phase":"pick","ttt/turnTeam":nextTeam,"ttt/attackingTeam":nextTeam,"ttt/answeringTeam":nextTeam,
+      "ttt/pickerId":picker?.id||"","ttt/pickerName":picker?.name||`等待 ${names[nextTeam]||nextTeam} 玩家`,
+      "ttt/selectedCell":-1,"ttt/questionIndex":(qi+1)%Math.max(1,Number(meta.questionCount||1))
+    });
+    await set(tttAnswerRef,null);
+  }finally{tttResolving=false;}
+}
+async function resolveTttBuzz(get,update,set,metaRef,tttBuzzRef,tttAnswerRef,buzz){
+  tttBuzzResolving=true;
+  try{
+    const metaSnap=await get(metaRef);
+    const meta=metaSnap.val()||{};
+    const t=meta.ttt||{};
+    if(meta.mode!=="ttt"||meta.status!=="playing"||t.phase!=="tiebreakBuzz")return;
+    await update(metaRef,{
+      "ttt/phase":"tiebreakAnswer",
+      "ttt/answeringTeam":buzz.team,
+      "ttt/buzzPlayerId":buzz.playerId,
+      "ttt/buzzPlayerName":buzz.name||"玩家",
+      "ttt/tiebreakSecondChance":false,
+      "ttt/feedback":`⚡ ${buzz.name||"玩家"} 搶到回答權！`
+    });
+    await set(tttAnswerRef,null);
+  }finally{tttBuzzResolving=false;}
+}
 function renderLobbyPlayers(){
   const list=Object.entries(networkState.players);
   $("#playerCount").textContent=`${list.length} 人`;
@@ -439,3 +697,5 @@ function renderNetworkRanking(){
 function goHome(){clearTimer();networkApi?.stop?.();networkApi=null;networkState={players:{},meta:{},controls:{}};oxPositions={};oxQuestionIndex=-1;mode=null;show("home");}
 
 show("home");refreshBooks();refreshAvailability();
+
+$("#tttBackLobbyBtn")?.addEventListener("click",()=>networkApi?.restart?.());
