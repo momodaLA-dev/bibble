@@ -41,6 +41,7 @@ import { QUESTIONS as NEW_MATTHEW } from "./matthew.js";
 import { QUESTIONS as NEW_MARK } from "./mark.js";
 import { QUESTIONS as NEW_LUKE } from "./luke.js";
 import { QUESTIONS as NEW_JOHN } from "./john.js";
+import { QUESTIONS as JESUS_LIFE } from "./jesus-life.js";
 import { QUESTIONS as NEW_ACTS } from "./acts.js";
 import { QUESTIONS as NEW_ROMANS } from "./romans.js";
 import { QUESTIONS as NEW_1_CORINTHIANS } from "./1-corinthians.js";
@@ -111,6 +112,7 @@ export const NEW_TESTAMENT = [
   "馬可福音",
   "路加福音",
   "約翰福音",
+  "耶穌生平（四福音）",
   "使徒行傳",
   "羅馬書",
   "哥林多前書",
@@ -181,6 +183,7 @@ export const BIBLE_QUESTIONS = [
   ...NEW_MARK,
   ...NEW_LUKE,
   ...NEW_JOHN,
+  ...JESUS_LIFE,
   ...NEW_ACTS,
   ...NEW_ROMANS,
   ...NEW_1_CORINTHIANS,
