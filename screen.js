@@ -3,6 +3,7 @@ import { booksFor, buildQuestionSet, filterQuestions, DIFFICULTY_LABELS, DIFFICU
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const QUESTION_SECONDS = 30;
+const OX_SECONDS = 8;
 const CHOICES = ["A","B","C","D"];
 
 let mode = null;
@@ -14,7 +15,10 @@ let selectedChoice = null;
 let revealed = false;
 let soloScore = 0;
 let networkApi = null;
-let networkState = { players:{}, meta:{} };
+let networkState = { players:{}, meta:{}, controls:{} };
+let oxPositions = {};
+let oxMoveTimer = null;
+let oxQuestionIndex = -1;
 let networkRevealInFlight = false;
 
 const sections = ["home","onlineLobby","setup","game","ranking"];
@@ -23,7 +27,7 @@ function show(id){
   $("#homeBtn").classList.toggle("hidden",id==="home");
 }
 function currentSettings(){return {testament:$("#testamentSelect").value,book:$("#bookSelect").value,difficulty:$("#difficultySelect").value};}
-function isNetworkMode(){return mode==="team"||mode==="online";}
+function isNetworkMode(){return mode==="team"||mode==="online"||mode==="ox";}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 
 $$('.mode-card').forEach(btn=>btn.addEventListener('click',()=>selectMode(btn.dataset.mode)));
@@ -54,14 +58,14 @@ async function selectMode(nextMode){
 
 function updateLobbyLabels(){
   const team = mode==="team";
-  $("#lobbyModeLabel").textContent=team?"⚔️ 兩隊競賽":"📱 手機多人模式";
-  $("#waitingTitle").textContent=team?"兩隊等待區":"玩家等待區";
+  $("#lobbyModeLabel").textContent=team?"⚔️ 兩隊競賽":mode==="ox"?"🕹️ OX 走位搶答":"📱 手機多人模式";
+  $("#waitingTitle").textContent=team?"兩隊等待區":mode==="ox"?"OX 玩家等待區":"玩家等待區";
   $("#teamLobbySummary").classList.toggle("hidden",!team);
 }
 
 function openSetup(){
   show("setup");
-  $("#setupTitle").textContent=mode==="solo"?"👤 單人競技設定":mode==="team"?"⚔️ 兩隊競賽設定":"📱 手機多人設定";
+  $("#setupTitle").textContent=mode==="solo"?"👤 單人競技設定":mode==="team"?"⚔️ 兩隊競賽設定":mode==="ox"?"🕹️ OX 走位搶答設定":"📱 手機多人設定";
   $("#teamNames").classList.toggle("hidden",mode!=="team");
   refreshBooks();
   refreshAvailability();
@@ -89,9 +93,26 @@ async function syncTeamNamesToRoom(){
   await networkApi.setTeamNames?.(names);
 }
 
+function makeOxQuestions(source){
+  let swapRun=0;
+  return source.map((q,i)=>{
+    const correctIndex=CHOICES.indexOf(q.answer);
+    const wrongIndexes=CHOICES.map((_,j)=>j).filter(j=>j!==correctIndex && q.choices?.[j]);
+    const useCorrect=Math.random()<0.5 || !wrongIndexes.length;
+    const pickIndex=useCorrect?correctIndex:wrongIndexes[Math.floor(Math.random()*wrongIndexes.length)];
+    const picked=q.choices?.[pickIndex]??"";
+    const answer=useCorrect?"O":"X";
+    let swapped=Math.random()<0.30;
+    if(swapRun>=2)swapped=false;
+    swapRun=swapped?swapRun+1:0;
+    return {...q,question:`${q.question}　答案是「${picked}」。`,answer,choices:["O 正確","X 錯誤"],oxLeft:swapped?"X":"O",oxRight:swapped?"O":"X",oxSwapped:swapped,originalAnswer:q.answer};
+  });
+}
+function currentRoundSeconds(){return mode==="ox"?OX_SECONDS:QUESTION_SECONDS;}
 function startConfiguredGame(){
   const count=Number($("#countSelect").value);
   questions=buildQuestionSet(currentSettings(),count);
+  if(mode==="ox")questions=makeOxQuestions(questions);
   if(!questions.length)return;
   currentIndex=0;soloScore=0;
   if(isNetworkMode()){
@@ -123,7 +144,7 @@ function runSoloTimer(){
   const tick=()=>{
     const ms=Math.max(0,roundEndsAt-Date.now());
     $("#timer").textContent=Math.ceil(ms/1000);
-    $("#timerBar").style.width=`${Math.max(0,Math.min(100,ms/(QUESTION_SECONDS*1000)*100))}%`;
+    $("#timerBar").style.width=`${Math.max(0,Math.min(100,ms/(currentRoundSeconds()*1000)*100))}%`;
     if(ms<=0){clearTimer();if(!revealed)revealSolo();}
   };
   tick();timerId=setInterval(tick,200);
@@ -167,7 +188,7 @@ async function ensureNetworkMode(requestedMode){
     let roomId=params.get("room")||randomRoom();
     if(!params.get("room")){const u=new URL(location.href);u.searchParams.set("room",roomId);history.replaceState({},"",u)}
     $("#roomCode").textContent=roomId;
-    const roomRef=ref(db,`rooms/${roomId}`),metaRef=ref(db,`rooms/${roomId}/meta`),playersRef=ref(db,`rooms/${roomId}/players`),votesRoot=ref(db,`rooms/${roomId}/votes`);
+    const roomRef=ref(db,`rooms/${roomId}`),metaRef=ref(db,`rooms/${roomId}/meta`),playersRef=ref(db,`rooms/${roomId}/players`),votesRoot=ref(db,`rooms/${roomId}/votes`),controlsRef=ref(db,`rooms/${roomId}/controls`);
     if(!(await get(metaRef)).exists())await set(metaRef,{status:"waiting",mode:requestedMode,questionCount:0,currentIndex:-1,roundEndsAt:0,teamNames:{A:"A隊",B:"B隊"},createdAt:Date.now()});
     else await update(metaRef,{mode:requestedMode,status:"waiting"});
 
@@ -193,7 +214,8 @@ async function ensureNetworkMode(requestedMode){
       }
       if(m.status==="ended")renderNetworkRanking();
     });
-    const unVotes=onValue(votesRoot,()=>{if(isNetworkMode()&&["playing","revealed"].includes(networkState.meta.status))renderNetworkVotes(db,ref,get,roomId);});
+    const unVotes=onValue(votesRoot,()=>{if(isNetworkMode()&&["playing","revealed"].includes(networkState.meta.status)&&mode!=="ox")renderNetworkVotes(db,ref,get,roomId);});
+    const unControls=onValue(controlsRef,s=>{networkState.controls=s.val()||{};});
 
     $("#onlineSetupBtn").onclick=openSetup;
     $("#newRoomBtn").onclick=()=>location.href=`${basePath()}index.html?room=${randomRoom()}`;
@@ -205,8 +227,9 @@ async function ensureNetworkMode(requestedMode){
         const u={};
         qs.forEach((q,i)=>u[`questions/${i}`]=q);
         u.votes=null;
+        u.controls=null;
         Object.entries(networkState.players).forEach(([id])=>u[`players/${id}/score`]=0);
-        u.meta={status:"playing",mode,questionCount:qs.length,currentIndex:0,roundEndsAt:Date.now()+QUESTION_SECONDS*1000,settings,teamNames:mode==="team"?teamNames:{A:"A隊",B:"B隊"},createdAt:networkState.meta.createdAt||Date.now()};
+        u.meta={status:"playing",mode,questionCount:qs.length,currentIndex:0,roundEndsAt:Date.now()+currentRoundSeconds()*1000,settings,teamNames:mode==="team"?teamNames:{A:"A隊",B:"B隊"},createdAt:networkState.meta.createdAt||Date.now()};
         await update(roomRef,u);
       },
       async reveal(){await revealNetwork(db,ref,get,update,roomId,roomRef);},
@@ -214,7 +237,7 @@ async function ensureNetworkMode(requestedMode){
         if(networkState.meta.status!=="revealed")return;
         const n=Number(networkState.meta.currentIndex)+1;
         if(n>=Number(networkState.meta.questionCount))await update(metaRef,{status:"ended"});
-        else await update(metaRef,{status:"playing",currentIndex:n,roundEndsAt:Date.now()+QUESTION_SECONDS*1000});
+        else await update(metaRef,{status:"playing",currentIndex:n,roundEndsAt:Date.now()+currentRoundSeconds()*1000});
       },
       async restart(){
         const u={votes:null,questions:null};
@@ -222,7 +245,7 @@ async function ensureNetworkMode(requestedMode){
         u["meta/status"]="waiting";u["meta/currentIndex"]=-1;u["meta/questionCount"]=0;u["meta/roundEndsAt"]=0;
         await update(roomRef,u);show("onlineLobby");
       },
-      stop(){unPlayers();unMeta();unVotes();}
+      stop(){unPlayers();unMeta();unVotes();unControls();stopOxMovement();}
     };
   }catch(err){
     $("#onlineLobby").innerHTML=`<div class="glass"><h2>無法啟動連線模式</h2><p class="muted">請確認網路連線與 Firebase 設定。單人競技仍可直接使用。</p><pre>${escapeHtml(err.message)}</pre></div>`;
@@ -256,7 +279,23 @@ async function renderNetworkQuestion(db,ref,get,roomId,m){
   $("#difficultyBadge").textContent=DIFFICULTY_LABELS[q.difficulty]||q.difficulty;
   $("#bookRef").textContent=q.book?`${q.book}${q.chapter?`・第 ${q.chapter} 章`:""}`:"";
   $("#questionText").textContent=q.question;
-  CHOICES.forEach((k,i)=>{const b=$(`.choice[data-choice="${k}"]`);$("#answer"+k).textContent=q.choices?.[i]??"";b.disabled=true;b.classList.remove('correct','wrong','selected');$("#votes"+k).classList.remove('hidden');});
+  const ox=mode==="ox";
+  $("#choices").classList.toggle("hidden",ox);
+  $("#oxArena").classList.toggle("hidden",!ox);
+  $("#oxStats").classList.add("hidden");
+  if(ox){
+    $("#oxLeftLabel").textContent=q.oxLeft||"O";
+    $("#oxRightLabel").textContent=q.oxRight||"X";
+    $("#oxLeftZone").classList.toggle("zone-o",(q.oxLeft||"O")==="O");
+    $("#oxLeftZone").classList.toggle("zone-x",(q.oxLeft||"O")==="X");
+    $("#oxRightZone").classList.toggle("zone-o",(q.oxRight||"X")==="O");
+    $("#oxRightZone").classList.toggle("zone-x",(q.oxRight||"X")==="X");
+    if(oxQuestionIndex!==Number(m.currentIndex)){oxQuestionIndex=Number(m.currentIndex);resetOxPositions();}
+    renderOxCharacters();startOxMovement();
+  }else{
+    stopOxMovement();
+    CHOICES.forEach((k,i)=>{const b=$(`.choice[data-choice="${k}"]`);$("#answer"+k).textContent=q.choices?.[i]??"";b.disabled=true;b.classList.remove('correct','wrong','selected');$("#votes"+k).classList.remove('hidden');});
+  }
   $("#teamScorePanel").classList.toggle("hidden",mode!=="team");
   if(mode==="team")renderTeamScores();
   $("#answerPanel").classList.toggle('hidden',m.status!=="revealed");
@@ -266,11 +305,11 @@ async function renderNetworkQuestion(db,ref,get,roomId,m){
     showNetworkCorrect(q);
     $("#timer").textContent="0";$("#timerBar").style.width="0%";
   }else{
-    $("#status").textContent="玩家作答中…";
+    $("#status").textContent=mode==="ox"?(q.oxSwapped?"🔄 本題 O／X 已換邊！看清楚再走。":"📱 傾斜手機，讓小人物走進 O 或 X 區") : "玩家作答中…";
     roundEndsAt=m.roundEndsAt;
     runNetworkTimer();
   }
-  await renderNetworkVotes(db,ref,get,roomId);
+  if(mode!=="ox")await renderNetworkVotes(db,ref,get,roomId);
 }
 
 function runNetworkTimer(){
@@ -278,7 +317,7 @@ function runNetworkTimer(){
   const tick=()=>{
     const ms=Math.max(0,roundEndsAt-Date.now());
     $("#timer").textContent=Math.ceil(ms/1000);
-    $("#timerBar").style.width=`${Math.max(0,Math.min(100,ms/(QUESTION_SECONDS*1000)*100))}%`;
+    $("#timerBar").style.width=`${Math.max(0,Math.min(100,ms/(currentRoundSeconds()*1000)*100))}%`;
     if(ms<=0){clearTimer();if(networkState.meta.status==="playing"&&!networkRevealInFlight){networkRevealInFlight=true;networkApi?.reveal?.();}}
   };
   tick();timerId=setInterval(tick,200);
@@ -298,7 +337,17 @@ async function revealNetwork(db,ref,get,update,roomId,roomRef){
     get(ref(db,`rooms/${roomId}/votes/${idx}`)),
     get(ref(db,`rooms/${roomId}/players`))
   ]);
-  const q=qSnap.val(),v=vSnap.val()||{},players=pSnap.val()||{},u={};
+  const q=qSnap.val(),players=pSnap.val()||{},u={};
+  let v=vSnap.val()||{};
+  if(mode==="ox"){
+    v={};
+    for(const id of Object.keys(players)){
+      const x=Number(oxPositions[id]?.x??50);
+      const choice=x<35?(q.oxLeft||"O"):x>65?(q.oxRight||"X"):"N";
+      v[id]={choice,at:Date.now()};
+      u[`votes/${idx}/${id}`]=v[id];
+    }
+  }
   for(const [id,p] of Object.entries(players)){
     const vote=v[id];if(vote?.choice!==q.answer)continue;
     const base=DIFFICULTY_POINTS[q.difficulty]||100;
@@ -310,12 +359,63 @@ async function revealNetwork(db,ref,get,update,roomId,roomRef){
 }
 
 function showNetworkCorrect(q){
-  const btn=$(`.choice[data-choice="${q.answer}"]`);if(btn)btn.classList.add('correct');
-  showCorrectPanel(q);
+  if(mode==="ox"){
+    stopOxMovement();
+    $("#oxLeftZone").classList.toggle("ox-correct",q.oxLeft===q.answer);
+    $("#oxRightZone").classList.toggle("ox-correct",q.oxRight===q.answer);
+    $("#correctAnswer").textContent=`✅ 正確答案：${q.answer}`;
+    $("#scriptureRef").textContent=q.reference?`📖 和合本：${q.reference}`:"";
+    $("#explanation").textContent=q.explanation||"";
+    $("#answerPanel").classList.remove("hidden");
+    renderOxStats(q);
+  }else{
+    const btn=$(`.choice[data-choice="${q.answer}"]`);if(btn)btn.classList.add('correct');
+    showCorrectPanel(q);
+  }
   $("#status").textContent="答案已公布；主持人按「下一題」才會繼續";
   if(mode==="team")renderTeamScores();
 }
 
+function resetOxPositions(){
+  oxPositions={};
+  const ids=Object.keys(networkState.players);
+  ids.forEach((id,i)=>{oxPositions[id]={x:48+(i%5)*1.0,y:18+(i%6)*12};});
+  $("#oxLeftZone")?.classList.remove("ox-correct");$("#oxRightZone")?.classList.remove("ox-correct");
+}
+function avatarFor(id){const a=["🧍","🧑","👩","👨","🧒","👧","👦"];let n=0;for(const c of id)n+=c.charCodeAt(0);return a[n%a.length];}
+function renderOxCharacters(){
+  const box=$("#oxCharacters");if(!box)return;
+  const live=new Set(Object.keys(networkState.players));
+  [...box.children].forEach(el=>{if(!live.has(el.dataset.id))el.remove();});
+  Object.entries(networkState.players).forEach(([id,p],i)=>{
+    if(!oxPositions[id])oxPositions[id]={x:50,y:18+(i%6)*12};
+    let el=box.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    if(!el){el=document.createElement("div");el.className="ox-person";el.dataset.id=id;el.innerHTML=`<span class="ox-avatar">${avatarFor(id)}</span><b>${escapeHtml(p.name)}</b>`;box.appendChild(el);}
+    el.style.left=`${oxPositions[id].x}%`;el.style.top=`${oxPositions[id].y}%`;
+  });
+}
+function startOxMovement(){
+  if(oxMoveTimer)return;
+  oxMoveTimer=setInterval(()=>{
+    if(mode!=="ox"||networkState.meta.status!=="playing")return;
+    for(const id of Object.keys(networkState.players)){
+      if(!oxPositions[id])oxPositions[id]={x:50,y:50};
+      const dir=networkState.controls[id]?.dir||"stop";
+      const step=dir==="left"?-0.55:dir==="right"?0.55:0;
+      oxPositions[id].x=Math.max(6,Math.min(94,oxPositions[id].x+step));
+      const el=$("#oxCharacters")?.querySelector(`[data-id="${CSS.escape(id)}"]`);
+      if(el){el.style.left=`${oxPositions[id].x}%`;el.classList.toggle("walking",step!==0);}
+    }
+  },50);
+}
+function stopOxMovement(){if(oxMoveTimer){clearInterval(oxMoveTimer);oxMoveTimer=null;}$("#oxCharacters")?.querySelectorAll(".walking").forEach(x=>x.classList.remove("walking"));}
+function renderOxStats(q){
+  const vals=Object.keys(networkState.players).map(id=>{const x=Number(oxPositions[id]?.x??50);return x<35?(q.oxLeft||"O"):x>65?(q.oxRight||"X"):"N";});
+  const o=vals.filter(x=>x==="O").length,x=vals.filter(v=>v==="X").length,n=vals.filter(v=>v==="N").length,correct=vals.filter(v=>v===q.answer).length;
+  const total=vals.length,rate=total?Math.round(correct/total*100):0;
+  $("#oxStats").innerHTML=`<span>⭕ O：<b>${o}</b></span><span>❌ X：<b>${x}</b></span><span>⏸ 未作答：<b>${n}</b></span><span>🎯 答對率：<b>${rate}%</b></span>`;
+  $("#oxStats").classList.remove("hidden");
+}
 function renderTeamScores(){
   const names=networkState.meta.teamNames||{A:"A隊",B:"B隊"};
   const totals={A:0,B:0};
@@ -336,6 +436,6 @@ function renderNetworkRanking(){
   }
 }
 
-function goHome(){clearTimer();networkApi?.stop?.();networkApi=null;networkState={players:{},meta:{}};mode=null;show("home");}
+function goHome(){clearTimer();networkApi?.stop?.();networkApi=null;networkState={players:{},meta:{},controls:{}};oxPositions={};oxQuestionIndex=-1;mode=null;show("home");}
 
 show("home");refreshBooks();refreshAvailability();

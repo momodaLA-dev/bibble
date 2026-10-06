@@ -11,8 +11,9 @@ let playerId=sessionStorage.getItem(`bible_player_${roomId}`)||null;
 let playerName=sessionStorage.getItem(`bible_name_${roomId}`)||"";
 let selectedTeam=sessionStorage.getItem(`bible_team_${roomId}`)||null;
 let roomMode="online",teamNames={A:"A隊",B:"B隊"},currentIndex=-1,votedIndex=null,timerId=null;
+let motionEnabled=false,lastDir="stop",lastSentAt=0;
 
-const show=id=>["join","waiting","vote","end"].forEach(x=>$("#"+x).classList.toggle("hidden",x!==id));
+const show=id=>["join","waiting","vote","ox","end"].forEach(x=>$("#"+x).classList.toggle("hidden",x!==id));
 const makeId=()=>crypto?.randomUUID?crypto.randomUUID():`p_${Date.now()}_${Math.random().toString(36).slice(2,9)}`;
 
 $("#joinBtn").addEventListener("click",joinGame);
@@ -20,12 +21,17 @@ $("#nameInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefa
 $("#pickA").addEventListener("click",()=>pickTeam("A"));
 $("#pickB").addEventListener("click",()=>pickTeam("B"));
 ["A","B","C","D"].forEach(k=>$("#vote"+k).addEventListener("click",()=>cast(k)));
+$("#enableMotionBtn").addEventListener("click",enableMotion);
+$("#moveLeftBtn").addEventListener("pointerdown",()=>sendDir("left",true));
+$("#moveRightBtn").addEventListener("pointerdown",()=>sendDir("right",true));
+["#moveLeftBtn","#moveRightBtn"].forEach(sel=>{["pointerup","pointercancel","pointerleave"].forEach(ev=>$(sel).addEventListener(ev,()=>sendDir("stop",true)));});
+$("#stopMoveBtn").addEventListener("click",()=>sendDir("stop",true));
 
 function pickTeam(t){selectedTeam=t;sessionStorage.setItem(`bible_team_${roomId}`,t);$("#pickA").classList.toggle("active",t==="A");$("#pickB").classList.toggle("active",t==="B");}
 function refreshModeUi(){
-  const team=roomMode==="team";
+  const team=roomMode==="team",ox=roomMode==="ox";
   $("#teamPicker").classList.toggle("hidden",!team);
-  $("#modeHint").textContent=team?"⚔️ 這是兩隊競賽：輸入名字後選擇隊伍。":"📱 這是手機多人模式：輸入名字後加入個人競賽。";
+  $("#modeHint").textContent=team?"⚔️ 這是兩隊競賽：輸入名字後選擇隊伍。":ox?"🕹️ 這是 OX 走位搶答：加入後用手機傾斜控制小人物。":"📱 這是手機多人模式：輸入名字後加入個人競賽。";
   $("#pickA").textContent=teamNames.A||"A隊";$("#pickB").textContent=teamNames.B||"B隊";
   if(selectedTeam)pickTeam(selectedTeam);
   $("#myTeam").classList.toggle("hidden",!team);
@@ -58,7 +64,7 @@ onValue(ref(db,`rooms/${roomId}/meta`),async s=>{
     show("waiting");return;
   }
   if(["playing","revealed"].includes(m.status)){
-    currentIndex=Number(m.currentIndex);await renderVote(m);return;
+    currentIndex=Number(m.currentIndex);if(roomMode==="ox")await renderOx(m);else await renderVote(m);return;
   }
   if(m.status==="ended"){
     clearTimer();const p=(await get(ref(db,`rooms/${roomId}/players/${playerId}`))).val();
@@ -68,6 +74,42 @@ onValue(ref(db,`rooms/${roomId}/meta`),async s=>{
   }
 });
 
+async function renderOx(m){
+  clearTimer();const q=(await get(ref(db,`rooms/${roomId}/questions/${currentIndex}`))).val();if(!q)return;
+  $("#oxMobileProgress").textContent=`第 ${currentIndex+1} / ${m.questionCount} 題`;
+  $("#oxMobileQuestion").textContent=q.question;
+  $("#phoneLeftLabel").textContent=q.oxLeft||"O";$("#phoneRightLabel").textContent=q.oxRight||"X";
+  if(m.status==="revealed"){
+    await sendDir("stop",true);$("#motionMsg").textContent=`✅ 正確答案：${q.answer}｜等待主持人下一題`;
+    $("#oxMobileReference").textContent=q.reference?`📖 和合本：${q.reference}`:"";$("#oxMobileReference").classList.toggle("hidden",!q.reference);
+    $("#oxMobileTimer").textContent="⏱ 本題結束";
+  }else{
+    $("#motionMsg").textContent=q.oxSwapped?"🔄 注意！這題 O／X 換邊了":"傾斜手機控制人物；回正就停止";
+    $("#oxMobileReference").classList.add("hidden");runOxTimer(m.roundEndsAt);
+  }
+  show("ox");
+}
+function runOxTimer(endsAt){
+  clearTimer();const tick=()=>{const ms=Math.max(0,(endsAt||0)-Date.now());$("#oxMobileTimer").textContent=`⏱ ${Math.ceil(ms/1000)} 秒`;if(ms<=0){clearTimer();sendDir("stop",true);$("#motionMsg").textContent="⏰ 時間到，位置已鎖定";}};tick();timerId=setInterval(tick,200);
+}
+async function enableMotion(){
+  try{
+    if(typeof DeviceOrientationEvent!=="undefined"&&typeof DeviceOrientationEvent.requestPermission==="function"){
+      const p=await DeviceOrientationEvent.requestPermission();if(p!=="granted")throw new Error("未取得動作感應權限");
+    }
+    window.removeEventListener("deviceorientation",handleOrientation);window.addEventListener("deviceorientation",handleOrientation,true);motionEnabled=true;
+    $("#enableMotionBtn").textContent="✅ 動作控制已啟用";$("#motionMsg").textContent="左右傾斜手機試試看";
+  }catch(e){$("#motionMsg").textContent=`無法啟用陀螺儀：${e.message}，可使用下方左右按鈕。`;}
+}
+function handleOrientation(e){
+  if(!motionEnabled||roomMode!=="ox")return;
+  const g=Number(e.gamma||0);const dir=g<-12?"left":g>12?"right":"stop";sendDir(dir);
+}
+async function sendDir(dir,force=false){
+  if(!playerId||roomMode!=="ox")return;
+  const now=Date.now();if(!force&&dir===lastDir)return;if(!force&&now-lastSentAt<80)return;
+  lastDir=dir;lastSentAt=now;await set(ref(db,`rooms/${roomId}/controls/${playerId}`),{dir,at:now});
+}
 async function renderVote(m){
   clearTimer();const q=(await get(ref(db,`rooms/${roomId}/questions/${currentIndex}`))).val();if(!q)return;
   $("#mobileProgress").textContent=`第 ${currentIndex+1} / ${m.questionCount} 題`;

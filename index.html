@@ -33,6 +33,10 @@
           <span class="mode-icon">📱</span><b>手機多人</b>
           <small>建立房間與 QR Code，各自累積個人分數與排行榜</small>
         </button>
+        <button class="mode-card" data-mode="ox">
+          <span class="mode-icon">🕹️</span><b>OX 走位搶答</b>
+          <small>手機左右傾斜控制小人物走進 O／X 區；O、X 每題可能換邊</small>
+        </button>
       </div>
     </section>
 
@@ -100,6 +104,13 @@
       <div class="timer-shell"><div id="timerBar" class="timer-bar"></div></div>
       <div id="bookRef" class="reference-top"></div>
       <div id="questionText" class="question"></div>
+      <div id="oxArena" class="ox-arena hidden">
+        <div id="oxLeftZone" class="ox-zone ox-left"><div id="oxLeftLabel" class="ox-big">O</div></div>
+        <div class="ox-center"><div>START</div><small>人物從中央出發</small></div>
+        <div id="oxRightZone" class="ox-zone ox-right"><div id="oxRightLabel" class="ox-big">X</div></div>
+        <div id="oxCharacters" class="ox-characters"></div>
+      </div>
+      <div id="oxStats" class="ox-stats hidden"></div>
       <div id="choices" class="choice-grid">
         <button class="choice choice-a" data-choice="A"><span class="letter">A</span><span id="answerA" class="answer"></span><span id="votesA" class="vote-count hidden"></span></button>
         <button class="choice choice-b" data-choice="B"><span class="letter">B</span><span id="answerB" class="answer"></span><span id="votesB" class="vote-count hidden"></span></button>
