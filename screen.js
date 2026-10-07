@@ -22,14 +22,23 @@ let oxQuestionIndex = -1;
 let networkRevealInFlight = false;
 let tttResolving = false;
 let tttBuzzResolving = false;
+let chainPositions = {};
+let chainMoveTimer = null;
+let chainAttackTimer = null;
+let chainSecondTimer = null;
+let chainAttackLock = false;
+let dodgeRoundTimer = null;
+let dodgeResolveTimer = null;
+let dodgeUiTimer = null;
+let dodgeResolving = false;
 
-const sections = ["home","onlineLobby","setup","game","tttGame","ranking"];
+const sections = ["home","onlineLobby","setup","game","tttGame","chainGame","dodgeGame","ranking"];
 function show(id){
   sections.forEach(x=>$("#"+x).classList.toggle("hidden",x!==id));
   $("#homeBtn").classList.toggle("hidden",id==="home");
 }
 function currentSettings(){return {testament:$("#testamentSelect").value,book:$("#bookSelect").value,difficulty:$("#difficultySelect").value};}
-function isNetworkMode(){return mode==="team"||mode==="online"||mode==="ox"||mode==="ttt";}
+function isNetworkMode(){return mode==="team"||mode==="online"||mode==="ox"||mode==="ttt"||mode==="chain"||mode==="dodge";}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 
 $$('.mode-card').forEach(btn=>btn.addEventListener('click',()=>selectMode(btn.dataset.mode)));
@@ -60,14 +69,15 @@ async function selectMode(nextMode){
 
 function updateLobbyLabels(){
   const team = mode==="team"||mode==="ttt";
-  $("#lobbyModeLabel").textContent=mode==="team"?"⚔️ 兩隊競賽":mode==="ox"?"🕹️ OX 走位搶答":mode==="ttt"?"⭕❌ 九宮格答題戰":"📱 手機多人模式";
-  $("#waitingTitle").textContent=mode==="team"?"兩隊等待區":mode==="ox"?"OX 玩家等待區":mode==="ttt"?"九宮格兩隊等待區":"玩家等待區";
+  $("#lobbyModeLabel").textContent=mode==="team"?"⚔️ 兩隊競賽":mode==="ox"?"🕹️ OX 走位搶答":mode==="ttt"?"⭕❌ 九宮格答題戰":mode==="chain"?"⛓️ 鎖鏈逃脫":mode==="dodge"?"💨 極限閃避":"📱 手機多人模式";
+  $("#waitingTitle").textContent=mode==="team"?"兩隊等待區":mode==="ox"?"OX 玩家等待區":mode==="ttt"?"九宮格兩隊等待區":mode==="chain"?"鎖鏈逃脫等待區":mode==="dodge"?"極限閃避等待區":"玩家等待區";
   $("#teamLobbySummary").classList.toggle("hidden",!team);
+  if($("#onlineSetupBtn"))$("#onlineSetupBtn").textContent=(mode==="chain"||mode==="dodge")?"開始遊戲":"設定題目";
 }
 
 function openSetup(){
   show("setup");
-  $("#setupTitle").textContent=mode==="solo"?"👤 單人競技設定":mode==="team"?"⚔️ 兩隊競賽設定":mode==="ox"?"🕹️ OX 走位搶答設定":mode==="ttt"?"⭕❌ 九宮格答題戰設定":"📱 手機多人設定";
+  $("#setupTitle").textContent=mode==="solo"?"👤 單人競技設定":mode==="team"?"⚔️ 兩隊競賽設定":mode==="ox"?"🕹️ OX 走位搶答設定":mode==="ttt"?"⭕❌ 九宮格答題戰設定":mode==="chain"?"⛓️ 鎖鏈逃脫":"📱 手機多人設定";
   $("#teamNames").classList.toggle("hidden",!(mode==="team"||mode==="ttt"));
   refreshBooks();
   refreshAvailability();
@@ -181,32 +191,28 @@ async function ensureNetworkMode(requestedMode){
   }
   try{
     const [
-  { initializeApp, getApps, getApp },
-  { initializeAppCheck, ReCaptchaEnterpriseProvider },
-  { getDatabase, ref, set, update, onValue, get, remove },
-  configMod
-] = await Promise.all([
-  import("https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js"),
-  import("https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js"),
-  import("https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js"),
-  import("./firebase-config.js")
-]);
+      { initializeApp, getApps, getApp },
+      { initializeAppCheck, ReCaptchaEnterpriseProvider },
+      { getDatabase, ref, set, update, onValue, get, remove },
+      configMod
+    ] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js"),
+      import("https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js"),
+      import("./firebase-config.js")
+    ]);
 
-// 初始化 Firebase
-const app = getApps().length
-  ? getApp()
-  : initializeApp(configMod.firebaseConfig);
+    const app = getApps().length ? getApp() : initializeApp(configMod.firebaseConfig);
 
-// 初始化 Firebase App Check
-initializeAppCheck(app, {
-  provider: new ReCaptchaEnterpriseProvider(configMod.appCheckSiteKey),
-  isTokenAutoRefreshEnabled: true
-});
+    if (configMod.appCheckSiteKey) {
+      initializeAppCheck(app, {
+        provider: new ReCaptchaEnterpriseProvider(configMod.appCheckSiteKey),
+        isTokenAutoRefreshEnabled: true
+      });
+    }
 
-// App Check 完成初始化後，再連接 Realtime Database
-const db = getDatabase(app);
-
-const params = new URLSearchParams(location.search);
+    const db = getDatabase(app);
+    const params = new URLSearchParams(location.search);
     const randomRoom=()=>Array.from({length:5},()=>"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random()*32)]).join("");
     let roomId=params.get("room")||randomRoom();
     if(!params.get("room")){const u=new URL(location.href);u.searchParams.set("room",roomId);history.replaceState({},"",u)}
@@ -229,6 +235,16 @@ const params = new URLSearchParams(location.search);
       const names=m.teamNames||{A:"A隊",B:"B隊"};
       $("#lobbyTeamAName").textContent=names.A||"A隊";$("#lobbyTeamBName").textContent=names.B||"B隊";
       if(m.status==="waiting"){if(!["setup","home"].some(id=>!$("#"+id).classList.contains("hidden")))show("onlineLobby");return;}
+      if(mode==="dodge"&&m.status==="playing"){
+        show("dodgeGame");
+        renderDodgeHost(m);
+        return;
+      }
+      if(mode==="chain"&&m.status==="playing"){
+        show("chainGame");
+        renderChainHost(m);
+        return;
+      }
       if(m.status==="playing"||m.status==="revealed"){
         questions=Object.values((await get(ref(db,`rooms/${roomId}/questions`))).val()||{});
         if(mode==="ttt"){
@@ -242,11 +258,16 @@ const params = new URLSearchParams(location.search);
       }
       if(m.status==="ended"){
         if(mode==="ttt"){show("tttGame");await renderTttHost(db,ref,get,roomId,m);return;}
+        if(mode==="chain"){stopChainGame();renderNetworkRanking();return;}
+        if(mode==="dodge"){stopDodgeGame();renderNetworkRanking();return;}
         renderNetworkRanking();
       }
     });
     const unVotes=onValue(votesRoot,()=>{if(isNetworkMode()&&["playing","revealed"].includes(networkState.meta.status)&&mode!=="ox")renderNetworkVotes(db,ref,get,roomId);});
-    const unControls=onValue(controlsRef,s=>{networkState.controls=s.val()||{};});
+    const unControls=onValue(controlsRef,s=>{
+      networkState.controls=s.val()||{};
+      if(mode==="chain")checkChainEscapes(roomRef);
+    });
     const unTttAnswer=onValue(tttAnswerRef,s=>{
       const ans=s.val();
       if(mode==="ttt"&&ans&&!tttResolving)resolveTttAnswer(db,ref,get,update,set,roomId,roomRef,metaRef,tttAnswerRef,ans);
@@ -256,12 +277,53 @@ const params = new URLSearchParams(location.search);
       if(mode==="ttt"&&buzz&&!tttBuzzResolving)resolveTttBuzz(get,update,set,metaRef,tttBuzzRef,tttAnswerRef,buzz);
     });
 
-    $("#onlineSetupBtn").onclick=openSetup;
+    $("#onlineSetupBtn").onclick=()=>mode==="chain"?networkApi?.startChain?.():mode==="dodge"?networkApi?.startDodge?.():openSetup();
     $("#newRoomBtn").onclick=()=>location.href=`${basePath()}index.html?room=${randomRoom()}`;
 
     networkApi={
       async setMode(next){mode=next;await update(metaRef,{mode:next,status:"waiting"});},
       async setTeamNames(names){await update(metaRef,{teamNames:names});},
+      async startDodge(){
+        const ids=Object.keys(networkState.players||{});
+        if(!ids.length){alert("請至少讓 1 位玩家加入後再開始。");return;}
+        stopDodgeGame();
+        const u={votes:null,questions:null,controls:null};
+        ids.forEach(id=>{
+          u[`players/${id}/score`]=0;
+          u[`players/${id}/alive`]=true;
+          u[`players/${id}/dodgeLastRound`]=0;
+          u[`players/${id}/dodgeAction`]="";
+        });
+        u.meta={
+          status:"playing",mode:"dodge",questionCount:0,currentIndex:-1,roundEndsAt:0,
+          teamNames:{A:"A隊",B:"B隊"},createdAt:networkState.meta.createdAt||Date.now(),
+          dodge:{round:0,required:"",command:"",startsAt:Date.now()+1200,endsAt:Date.now()+3200,speedMs:2400,phase:"ready"}
+        };
+        await update(roomRef,u);
+        startDodgeGame(db,ref,get,update,roomId,roomRef,metaRef);
+      },
+      async startChain(){
+        const ids=Object.keys(networkState.players||{});
+        if(!ids.length){alert("請至少讓 1 位玩家加入後再開始。");return;}
+        stopChainGame();
+        chainPositions={};
+        const u={votes:null,questions:null,controls:null};
+        ids.forEach((id,i)=>{
+          u[`players/${id}/score`]=0;
+          u[`players/${id}/chained`]=false;
+          u[`players/${id}/chainHits`]=0;
+          u[`players/${id}/chainEscapes`]=0;
+          chainPositions[id]={x:18+(i%5)*16,y:20+(i%4)*18};
+        });
+        u.meta={
+          status:"playing",mode:"chain",questionCount:0,currentIndex:-1,
+          roundEndsAt:Date.now()+45000,teamNames:{A:"A隊",B:"B隊"},
+          createdAt:networkState.meta.createdAt||Date.now(),
+          chain:{attackSeq:0,warningZone:"",strikeZone:"",warningUntil:0,lastStrikeAt:0}
+        };
+        await update(roomRef,u);
+        startChainGame(db,ref,get,update,roomId,roomRef,metaRef);
+      },
       async startGame({questions:qs,settings,teamNames}){
         if(mode==="ttt"){
           const hasA=Object.values(networkState.players||{}).some(p=>p.team==="A");
@@ -300,12 +362,13 @@ const params = new URLSearchParams(location.search);
         else await update(metaRef,{status:"playing",currentIndex:n,roundEndsAt:Date.now()+currentRoundSeconds()*1000});
       },
       async restart(){
-        const u={votes:null,questions:null,tttAnswer:null,tttBuzz:null};
+        stopChainGame();stopDodgeGame();
+        const u={votes:null,questions:null,tttAnswer:null,tttBuzz:null,controls:null};
         Object.entries(networkState.players).forEach(([id])=>u[`players/${id}/score`]=0);
         u["meta/status"]="waiting";u["meta/currentIndex"]=-1;u["meta/questionCount"]=0;u["meta/roundEndsAt"]=0;
         await update(roomRef,u);show("onlineLobby");
       },
-      stop(){unPlayers();unMeta();unVotes();unControls();unTttAnswer();unTttBuzz();stopOxMovement();}
+      stop(){unPlayers();unMeta();unVotes();unControls();unTttAnswer();unTttBuzz();stopOxMovement();stopChainGame();stopDodgeGame();}
     };
   }catch(err){
     $("#onlineLobby").innerHTML=`<div class="glass"><h2>無法啟動連線模式</h2><p class="muted">請確認網路連線與 Firebase 設定。單人競技仍可直接使用。</p><pre>${escapeHtml(err.message)}</pre></div>`;
@@ -531,6 +594,265 @@ async function resolveTttBuzz(get,update,set,metaRef,tttBuzzRef,tttAnswerRef,buz
     await set(tttAnswerRef,null);
   }finally{tttBuzzResolving=false;}
 }
+
+
+const DODGE_ACTIONS=[
+  {action:"left",icon:"⬅️",text:"往左閃！",from:"right"},
+  {action:"right",icon:"➡️",text:"往右閃！",from:"left"},
+  {action:"up",icon:"⬆️",text:"往上閃！",from:"bottom"},
+  {action:"down",icon:"⬇️",text:"往下閃！",from:"top"},
+  {action:"jump",icon:"🦘",text:"小跳一下！",from:"front"}
+];
+
+function dodgeActionInfo(action){return DODGE_ACTIONS.find(x=>x.action===action)||DODGE_ACTIONS[0];}
+function renderDodgePlayers(){
+  const box=$("#dodgePlayers");if(!box)return;
+  const live=new Set(Object.keys(networkState.players||{}));
+  [...box.children].forEach(el=>{if(!live.has(el.dataset.id))el.remove();});
+  Object.entries(networkState.players||{}).forEach(([id,p],i)=>{
+    let el=box.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    if(!el){
+      el=document.createElement("div");el.className="dodge-person";el.dataset.id=id;
+      const x=18+(i%5)*16,y=18+(Math.floor(i/5)%4)*19;
+      el.style.left=`${x}%`;el.style.top=`${y}%`;
+      el.innerHTML=`<span>${avatarFor(id)}</span><b>${escapeHtml(p.name||"玩家")}</b>`;
+      box.appendChild(el);
+    }
+    el.classList.toggle("out",p.alive===false);
+    el.classList.toggle("alive",p.alive!==false);
+  });
+}
+function renderDodgeScoreboard(){
+  const box=$("#dodgeScoreboard");if(!box)return;
+  const arr=Object.values(networkState.players||{}).sort((a,b)=>Number(b.score||0)-Number(a.score||0));
+  box.innerHTML=arr.map(p=>`<div><b>${p.alive===false?"💥":"🟢"} ${escapeHtml(p.name||"玩家")}</b><span>${Number(p.score||0)} 分</span><small>${p.alive===false?"已出局":"存活中"}</small></div>`).join("");
+}
+function renderDodgeHost(m){
+  const d=m.dodge||{},info=dodgeActionInfo(d.required||"left");
+  $("#dodgeRound").textContent=Number(d.round||0);
+  const speed=Math.max(1,2400/Math.max(900,Number(d.speedMs||2400)));
+  $("#dodgeSpeed").textContent=`${speed.toFixed(1)}×`;
+  $("#dodgeCommandIcon").textContent=d.phase==="active"?info.icon:"READY";
+  $("#dodgeCommandText").textContent=d.phase==="active"?info.text:"準備下一波";
+  $("#dodgeStatus").textContent=d.phase==="active"?"照提示用手機動作閃避！":"注意下一個障礙";
+  renderDodgePlayers();renderDodgeScoreboard();
+
+  const ob=$("#dodgeObstacle");
+  if(d.phase==="active"){
+    ob.className=`dodge-obstacle incoming from-${info.from}`;
+    ob.textContent=info.from==="front"?"💥":"🧱";
+    ob.style.setProperty("--dodge-duration",`${Math.max(.6,Number(d.speedMs||1800)/1000)}s`);
+    ob.classList.remove("hidden");
+  }else ob.classList.add("hidden");
+
+  if(!dodgeUiTimer){
+    dodgeUiTimer=setInterval(()=>{
+      const meta=networkState.meta||{},dd=meta.dodge||{};
+      if(mode!=="dodge"||meta.status!=="playing")return;
+      const total=Math.max(1,Number(dd.endsAt||0)-Number(dd.startsAt||0));
+      const left=Math.max(0,Number(dd.endsAt||0)-Date.now());
+      $("#dodgeProgressBar").style.width=`${Math.max(0,Math.min(100,left/total*100))}%`;
+    },50);
+  }
+}
+function chooseDodgeAction(round){
+  // avoid too many jumps in a row and make all five actions appear over time
+  const pool=DODGE_ACTIONS;
+  return pool[(round+Math.floor(Math.random()*pool.length))%pool.length];
+}
+async function startDodgeGame(db,ref,get,update,roomId,roomRef,metaRef){
+  stopDodgeGame();
+  const nextRound=async()=>{
+    if(mode!=="dodge"||networkState.meta.status!=="playing")return;
+    const playersSnap=await get(ref(db,`rooms/${roomId}/players`));
+    const players=playersSnap.val()||{};
+    const aliveIds=Object.entries(players).filter(([,p])=>p.alive!==false).map(([id])=>id);
+    if(!aliveIds.length){
+      await update(metaRef,{status:"ended","dodge/phase":"ended"});stopDodgeGame();return;
+    }
+
+    const prevRound=Number(networkState.meta.dodge?.round||0);
+    const round=prevRound+1;
+    const speedMs=Math.max(950,2400-(round-1)*90);
+    const info=chooseDodgeAction(round);
+    const clearActions={};
+    aliveIds.forEach(id=>clearActions[`players/${id}/dodgeAction`]="");
+    await update(roomRef,clearActions);
+    const now=Date.now(),endsAt=now+speedMs;
+    await update(metaRef,{
+      "dodge/round":round,"dodge/required":info.action,"dodge/command":info.text,
+      "dodge/startsAt":now,"dodge/endsAt":endsAt,"dodge/speedMs":speedMs,"dodge/phase":"active"
+    });
+
+    dodgeResolveTimer=setTimeout(async()=>{
+      if(mode!=="dodge"||networkState.meta.status!=="playing")return;
+      const ps=(await get(ref(db,`rooms/${roomId}/players`))).val()||{};
+      const updates={};
+      let survivors=0;
+      for(const [id,p] of Object.entries(ps)){
+        if(p.alive===false)continue;
+        const ok=p.dodgeAction===info.action && Number(p.dodgeLastRound||0)===round;
+        if(ok){
+          survivors++;
+          updates[`players/${id}/score`]=Number(p.score||0)+100+round*5;
+        }else{
+          updates[`players/${id}/alive`]=false;
+        }
+      }
+      updates["meta/dodge/phase"]="resolved";
+      await update(roomRef,updates);
+      renderDodgePlayers();renderDodgeScoreboard();
+      if(survivors<=0||round>=30){
+        setTimeout(async()=>{await update(metaRef,{status:"ended","dodge/phase":"ended"});stopDodgeGame();},900);
+      }else{
+        dodgeRoundTimer=setTimeout(nextRound,Math.max(380,850-round*12));
+      }
+    },speedMs);
+  };
+  dodgeRoundTimer=setTimeout(nextRound,1200);
+}
+function stopDodgeGame(){
+  if(dodgeRoundTimer){clearTimeout(dodgeRoundTimer);dodgeRoundTimer=null;}
+  if(dodgeResolveTimer){clearTimeout(dodgeResolveTimer);dodgeResolveTimer=null;}
+  if(dodgeUiTimer){clearInterval(dodgeUiTimer);dodgeUiTimer=null;}
+  $("#dodgeObstacle")?.classList.add("hidden");
+  if($("#dodgeProgressBar"))$("#dodgeProgressBar").style.width="0%";
+}
+function chainZoneForX(x){return x<35?"left":x>65?"right":"center";}
+function chainZoneLabel(z){return z==="left"?"左側":z==="right"?"右側":"中央";}
+function resetChainPositions(){
+  const ids=Object.keys(networkState.players||{});
+  ids.forEach((id,i)=>{if(!chainPositions[id])chainPositions[id]={x:18+(i%5)*16,y:18+(i%4)*19};});
+}
+function renderChainPlayers(){
+  const box=$("#chainPlayers");if(!box)return;
+  resetChainPositions();
+  const live=new Set(Object.keys(networkState.players||{}));
+  [...box.children].forEach(el=>{if(!live.has(el.dataset.id))el.remove();});
+  Object.entries(networkState.players||{}).forEach(([id,p],i)=>{
+    let el=box.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    if(!el){
+      el=document.createElement("div");el.className="chain-person";el.dataset.id=id;
+      el.innerHTML=`<span class="chain-person-avatar">${avatarFor(id)}</span><b>${escapeHtml(p.name||"玩家")}</b><small class="chain-person-state"></small>`;
+      box.appendChild(el);
+    }
+    const pos=chainPositions[id]||{x:50,y:50};
+    el.style.left=`${pos.x}%`;el.style.top=`${pos.y}%`;
+    el.classList.toggle("is-chained",!!p.chained);
+    const st=el.querySelector(".chain-person-state");
+    if(st)st.textContent=p.chained?"⛓️ 被鎖住":"";
+  });
+}
+function renderChainScores(){
+  const box=$("#chainScores");if(!box)return;
+  const rows=Object.values(networkState.players||{}).sort((a,b)=>(b.score||0)-(a.score||0));
+  box.innerHTML=rows.map(p=>`<div><b>${escapeHtml(p.name||"玩家")}</b><span>${Number(p.score||0)} 分</span><small>被抓 ${Number(p.chainHits||0)} 次・掙脫 ${Number(p.chainEscapes||0)} 次</small></div>`).join("");
+}
+function renderChainHost(m){
+  const ms=Math.max(0,Number(m.roundEndsAt||0)-Date.now());
+  $("#chainTimer").textContent=Math.ceil(ms/1000);
+  $("#chainStatus").textContent=m.chain?.warningZone?`⚠️ ${chainZoneLabel(m.chain.warningZone)}即將遭到鎖鏈攻擊！`:"左右移動，躲開鎖鏈！";
+  renderChainPlayers();
+  renderChainScores();
+  if(!chainMoveTimer)startChainGameMovement();
+}
+function startChainGameMovement(){
+  if(chainMoveTimer)return;
+  chainMoveTimer=setInterval(()=>{
+    if(mode!=="chain"||networkState.meta.status!=="playing")return;
+    resetChainPositions();
+    for(const [id,p] of Object.entries(networkState.players||{})){
+      const pos=chainPositions[id];if(!pos)continue;
+      if(p.chained)continue;
+      const dir=networkState.controls[id]?.dir||"stop";
+      const step=dir==="left"?-0.65:dir==="right"?0.65:0;
+      pos.x=Math.max(6,Math.min(94,pos.x+step));
+      const el=$("#chainPlayers")?.querySelector(`[data-id="${CSS.escape(id)}"]`);
+      if(el){el.style.left=`${pos.x}%`;el.classList.toggle("walking",step!==0);}
+    }
+  },50);
+}
+async function checkChainEscapes(roomRef){
+  if(mode!=="chain"||networkState.meta.status!=="playing")return;
+  const u={};
+  for(const [id,p] of Object.entries(networkState.players||{})){
+    if(!p.chained)continue;
+    const progress=Number(networkState.controls[id]?.shakeProgress||0);
+    if(progress>=8){
+      u[`players/${id}/chained`]=false;
+      u[`players/${id}/chainEscapes`]=Number(p.chainEscapes||0)+1;
+      u[`players/${id}/score`]=Number(p.score||0)+5;
+      u[`controls/${id}/shakeProgress`]=0;
+    }
+  }
+  if(Object.keys(u).length)await update(roomRef,u);
+}
+function showChainWarning(zone){
+  const w=$("#chainWarning"),s=$("#chainStrike");
+  w.textContent=`⚠️ ${chainZoneLabel(zone)}鎖鏈來了！`;
+  w.dataset.zone=zone;w.classList.remove("hidden");
+  s.classList.add("hidden");
+  $("#chainArena")?.setAttribute("data-warning-zone",zone);
+}
+function showChainStrike(zone){
+  $("#chainWarning")?.classList.add("hidden");
+  const s=$("#chainStrike");s.textContent="⛓️⛓️⛓️";s.dataset.zone=zone;s.classList.remove("hidden");
+  $("#chainArena")?.setAttribute("data-strike-zone",zone);
+  setTimeout(()=>{s.classList.add("hidden");$("#chainArena")?.removeAttribute("data-strike-zone");},650);
+}
+function startChainGame(db,ref,get,update,roomId,roomRef,metaRef){
+  stopChainGame();
+  startChainGameMovement();
+  const scheduleAttack=()=>{
+    if(mode!=="chain"||networkState.meta.status!=="playing")return;
+    const zones=["left","center","right"];
+    const zone=zones[Math.floor(Math.random()*zones.length)];
+    showChainWarning(zone);
+    update(metaRef,{"chain/warningZone":zone,"chain/warningUntil":Date.now()+900});
+    chainAttackTimer=setTimeout(async()=>{
+      if(mode!=="chain"||networkState.meta.status!=="playing")return;
+      showChainStrike(zone);
+      const u={};
+      for(const [id,p] of Object.entries(networkState.players||{})){
+        const pos=chainPositions[id]||{x:50};
+        if(p.chained)continue;
+        if(chainZoneForX(pos.x)===zone){
+          u[`players/${id}/chained`]=true;
+          u[`players/${id}/chainHits`]=Number(p.chainHits||0)+1;
+          u[`controls/${id}/shakeProgress`]=0;
+        }else{
+          u[`players/${id}/score`]=Number(p.score||0)+10;
+        }
+      }
+      u["meta/chain/warningZone"]="";
+      u["meta/chain/strikeZone"]=zone;
+      u["meta/chain/lastStrikeAt"]=Date.now();
+      u["meta/chain/attackSeq"]=Number(networkState.meta.chain?.attackSeq||0)+1;
+      await update(roomRef,u);
+      chainAttackTimer=setTimeout(scheduleAttack,2100+Math.floor(Math.random()*900));
+    },900);
+  };
+  chainAttackTimer=setTimeout(scheduleAttack,1400);
+  chainSecondTimer=setInterval(async()=>{
+    if(mode!=="chain"||networkState.meta.status!=="playing")return;
+    const left=Number(networkState.meta.roundEndsAt||0)-Date.now();
+    if(left<=0){
+      stopChainGame();
+      await update(metaRef,{status:"ended","chain/warningZone":"","chain/strikeZone":""});
+      return;
+    }
+    $("#chainTimer").textContent=Math.ceil(left/1000);
+    renderChainScores();
+  },250);
+}
+function stopChainGame(){
+  if(chainMoveTimer){clearInterval(chainMoveTimer);chainMoveTimer=null;}
+  if(chainAttackTimer){clearTimeout(chainAttackTimer);chainAttackTimer=null;}
+  if(chainSecondTimer){clearInterval(chainSecondTimer);chainSecondTimer=null;}
+  $("#chainWarning")?.classList.add("hidden");
+  $("#chainStrike")?.classList.add("hidden");
+  $("#chainPlayers")?.querySelectorAll(".walking").forEach(x=>x.classList.remove("walking"));
+}
 function renderLobbyPlayers(){
   const list=Object.entries(networkState.players);
   $("#playerCount").textContent=`${list.length} 人`;
@@ -720,3 +1042,7 @@ function goHome(){clearTimer();networkApi?.stop?.();networkApi=null;networkState
 show("home");refreshBooks();refreshAvailability();
 
 $("#tttBackLobbyBtn")?.addEventListener("click",()=>networkApi?.restart?.());
+
+$("#chainRestartBtn")?.addEventListener("click",()=>networkApi?.restart?.());
+
+$("#dodgeRestartBtn")?.addEventListener("click",()=>networkApi?.restart?.());

@@ -3,7 +3,110 @@
 <section id="join" class="glass mobile-card"><div class="muted">ROOM <strong id="roomLabel"></strong></div><h1>📖 加入聖經問答</h1><div id="modeHint" class="notice">讀取房間資訊中…</div><label>你的名字<input id="nameInput" maxlength="12" placeholder="例如：若瑩"></label><div id="teamPicker" class="team-picker hidden"><div class="muted">選擇隊伍</div><div class="mobile-choice-grid"><button id="pickA" class="secondary team-pick" data-team="A">A隊</button><button id="pickB" class="secondary team-pick" data-team="B">B隊</button></div></div><div id="joinMsg" class="muted"></div><button id="joinBtn" class="primary full">加入遊戲</button></section>
 <section id="waiting" class="glass mobile-card hidden"><div class="big-icon">🎈</div><h1>加入成功</h1><h2 id="welcome"></h2><p id="myTeam" class="team-tag hidden"></p><p id="waitText" class="muted">等待主持人開始。</p></section>
 <section id="vote" class="mobile-card hidden"><div class="glass"><div id="mobileProgress" class="muted"></div><div id="mobileTimer" class="mobile-timer">⏱ 30 秒</div><h2 id="mobileQuestion"></h2><div class="mobile-choice-grid"><button id="voteA" class="mobile-choice choice-a">A</button><button id="voteB" class="mobile-choice choice-b">B</button><button id="voteC" class="mobile-choice choice-c">C</button><button id="voteD" class="mobile-choice choice-d">D</button></div><div id="voteMsg" class="status">請選擇答案</div><div id="mobileReference" class="scripture-ref hidden"></div></div></section>
-<section id="ox" class="mobile-card hidden"><div class="glass"><div id="oxMobileProgress" class="muted"></div><div id="oxMobileTimer" class="mobile-timer">⏱ 8 秒</div><h2 id="oxMobileQuestion"></h2><div class="ox-phone-guide"><span id="phoneLeftLabel">O</span><b>← 傾斜手機 →</b><span id="phoneRightLabel">X</span></div><div id="motionMsg" class="status">先按「啟用動作控制」</div><button id="enableMotionBtn" class="primary full">📱 啟用動作控制</button><div class="ox-fallback"><button id="moveLeftBtn" class="secondary">← 左移</button><button id="stopMoveBtn" class="secondary">停止</button><button id="moveRightBtn" class="secondary">右移 →</button></div><div id="oxMobileReference" class="scripture-ref hidden"></div></div></section>
+<section id="ox" class="mobile-card hidden"><div class="glass">
+<div id="oxMobileProgress" class="muted"></div>
+<div id="oxMobileTimer" class="mobile-timer">⏱ 8 秒</div>
+<h2 id="oxMobileQuestion"></h2>
+
+<div class="ox-phone-guide">
+  <span id="phoneLeftLabel">O</span>
+  <b>← 傾斜手機 →</b>
+  <span id="phoneRightLabel">X</span>
+</div>
+
+<div class="ox-phone-track-wrap">
+  <div class="ox-phone-track">
+    <div id="phoneLeftZone" class="ox-phone-zone left"><span id="phoneLeftTrackLabel">O</span></div>
+    <div class="ox-phone-zone center"><span>中央</span></div>
+    <div id="phoneRightZone" class="ox-phone-zone right"><span id="phoneRightTrackLabel">X</span></div>
+    <div id="phonePlayerMarker" class="ox-phone-player" aria-label="目前位置">
+      <span class="avatar">🧍</span>
+      <small id="phonePlayerName">我</small>
+    </div>
+  </div>
+  <div id="phonePositionText" class="ox-position-text">目前位置：中央等待區</div>
+  <div id="phoneChoiceText" class="ox-choice-text">目前選擇：尚未進入 O／X 區</div>
+</div>
+
+<div id="motionMsg" class="status">先按「啟用動作控制」</div>
+<button id="enableMotionBtn" class="primary full">📱 啟用動作控制</button>
+<div class="ox-fallback">
+  <button id="moveLeftBtn" class="secondary">← 左移</button>
+  <button id="stopMoveBtn" class="secondary">停止</button>
+  <button id="moveRightBtn" class="secondary">右移 →</button>
+</div>
+<div id="oxMobileReference" class="scripture-ref hidden"></div>
+</div></section>
+
+<section id="chain" class="mobile-card hidden">
+  <div class="glass">
+    <div class="muted">⛓️ 鎖鏈逃脫</div>
+    <div id="chainMobileTimer" class="mobile-timer">⏱ 45 秒</div>
+    <h2 id="chainMobileTitle">左右傾斜躲開鎖鏈</h2>
+
+    <div class="chain-phone-track">
+      <div class="chain-phone-zone left"><span>左</span></div>
+      <div class="chain-phone-zone center"><span>中</span></div>
+      <div class="chain-phone-zone right"><span>右</span></div>
+      <div id="chainPhoneMarker" class="chain-phone-player"><span>🧍</span><small id="chainPhoneName">我</small></div>
+    </div>
+    <div id="chainPositionText" class="ox-position-text">目前位置：中央</div>
+
+    <div id="chainTrapBox" class="chain-trap-box hidden">
+      <div class="chain-trap-title">⛓️ 被鎖鏈纏住了！</div>
+      <div class="muted">快速左右甩動手機來掙脫</div>
+      <div class="chain-break-shell"><div id="chainBreakBar" class="chain-break-bar"></div></div>
+      <div id="chainBreakText">掙脫 0 / 8</div>
+      <button id="chainBreakTap" class="secondary full">感應器不能用？快速點這裡掙脫</button>
+    </div>
+
+    <div id="chainSafeBox">
+      <div id="chainMobileMsg" class="status">等待開始</div>
+      <button id="chainEnableMotionBtn" class="primary full">📱 啟用動作控制</button>
+      <div class="ox-fallback">
+        <button id="chainLeftBtn" class="secondary">← 左移</button>
+        <button id="chainStopBtn" class="secondary">停止</button>
+        <button id="chainRightBtn" class="secondary">右移 →</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="dodge" class="mobile-card hidden">
+  <div class="glass">
+    <div class="muted">💨 極限閃避</div>
+    <div id="dodgeMobileRound" class="mobile-timer">第 0 回合</div>
+    <h2 id="dodgeMobileCommand">等待開始</h2>
+
+    <div class="dodge-phone-pad">
+      <div class="dodge-pad-cell"></div>
+      <div id="dodgeUp" class="dodge-pad-cell key">↑</div>
+      <div class="dodge-pad-cell"></div>
+      <div id="dodgeLeft" class="dodge-pad-cell key">←</div>
+      <div class="dodge-pad-cell center"><span id="dodgePhoneAvatar">🧍</span></div>
+      <div id="dodgeRight" class="dodge-pad-cell key">→</div>
+      <div class="dodge-pad-cell"></div>
+      <div id="dodgeDown" class="dodge-pad-cell key">↓</div>
+      <div id="dodgeJump" class="dodge-pad-cell jump">跳</div>
+    </div>
+
+    <div id="dodgeMobileMsg" class="status">按下啟用感應後開始</div>
+    <button id="dodgeEnableMotionBtn" class="primary full">📱 啟用動作控制</button>
+
+    <div id="dodgeFallback" class="dodge-fallback">
+      <button data-dodge="left" class="secondary">←</button>
+      <button data-dodge="up" class="secondary">↑</button>
+      <button data-dodge="jump" class="secondary">跳</button>
+      <button data-dodge="down" class="secondary">↓</button>
+      <button data-dodge="right" class="secondary">→</button>
+    </div>
+
+    <div id="dodgeEliminated" class="dodge-eliminated hidden">
+      💥 你被撞到了，本局出局
+      <small>可以繼續看大螢幕幫隊友加油</small>
+    </div>
+  </div>
+</section>
 <section id="ttt" class="mobile-card hidden">
 <div class="glass">
   <div id="tttMobilePhase" class="muted"></div>

@@ -41,6 +41,14 @@
           <span class="mode-icon">⭕❌</span><b>九宮格答題戰</b>
           <small>A／B 兩隊輪流攻格；隨機抽隊員選格，答錯可由對方接答，平手進入搶答決勝</small>
         </button>
+        <button class="mode-card" data-mode="chain">
+          <span class="mode-icon">⛓️</span><b>鎖鏈逃脫</b>
+          <small>左右傾斜躲開敵人鎖鏈；被纏住後快速左右甩動手機掙脫</small>
+        </button>
+        <button class="mode-card" data-mode="dodge">
+          <span class="mode-icon">💨</span><b>極限閃避</b>
+          <small>看大螢幕提示，用手機上下左右閃避或小跳躍；撞到障礙就出局，速度會越來越快</small>
+        </button>
       </div>
     </section>
 
@@ -182,6 +190,69 @@
       <div id="tttWinnerBanner" class="ttt-winner hidden"></div>
       <div class="button-row center">
         <button id="tttBackLobbyBtn" class="secondary hidden">返回等待區</button>
+      </div>
+    </section>
+
+
+    <section id="chainGame" class="glass hidden">
+      <div class="chain-head">
+        <div>
+          <div class="eyebrow">⛓️ CHAIN ESCAPE</div>
+          <h2>鎖鏈逃脫</h2>
+          <div id="chainStatus" class="status">準備開始</div>
+        </div>
+        <div class="chain-clock">⏱ <span id="chainTimer">45</span> 秒</div>
+      </div>
+
+      <div id="chainArena" class="chain-arena">
+        <div class="chain-lane chain-left"><span>左側</span></div>
+        <div class="chain-lane chain-center"><span>中央</span></div>
+        <div class="chain-lane chain-right"><span>右側</span></div>
+        <div id="chainWarning" class="chain-warning hidden">⚠️ 鎖鏈來了！</div>
+        <div id="chainStrike" class="chain-strike hidden">⛓️⛓️⛓️</div>
+        <div id="chainPlayers" class="chain-players"></div>
+      </div>
+
+      <div class="chain-legend">
+        <span>左右傾斜手機＝移動</span>
+        <span>被鎖住＝快速左右甩動手機掙脫</span>
+      </div>
+      <div id="chainScores" class="chain-scores"></div>
+      <div class="button-row center">
+        <button id="chainRestartBtn" class="primary hidden">再玩一次</button>
+      </div>
+    </section>
+
+
+    <section id="dodgeGame" class="glass hidden">
+      <div class="dodge-head">
+        <div>
+          <div class="eyebrow">💨 DODGE RUSH</div>
+          <h2>極限閃避</h2>
+          <div id="dodgeStatus" class="status">準備開始</div>
+        </div>
+        <div class="dodge-meta">
+          <b>第 <span id="dodgeRound">0</span> 回合</b>
+          <b>速度 <span id="dodgeSpeed">1.0×</span></b>
+        </div>
+      </div>
+
+      <div id="dodgeArena" class="dodge-arena">
+        <div class="dodge-center-target">
+          <div id="dodgeCommandIcon" class="dodge-command-icon">READY</div>
+          <div id="dodgeCommandText" class="dodge-command-text">看提示閃避</div>
+        </div>
+        <div id="dodgeObstacle" class="dodge-obstacle hidden">🧱</div>
+        <div id="dodgePlayers" class="dodge-players"></div>
+      </div>
+
+      <div id="dodgeProgressShell" class="dodge-progress-shell">
+        <div id="dodgeProgressBar" class="dodge-progress-bar"></div>
+      </div>
+
+      <div id="dodgeScoreboard" class="chain-scores"></div>
+      <div class="button-row center">
+        <button id="dodgeRestartBtn" class="primary hidden">再玩一次</button>
       </div>
     </section>
 
