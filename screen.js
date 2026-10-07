@@ -180,12 +180,33 @@ async function ensureNetworkMode(requestedMode){
     return;
   }
   try{
-    const [{initializeApp,getApps,getApp},{getDatabase,ref,set,update,onValue,get,remove},configMod]=await Promise.all([
-      import("https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js"),
-      import("https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js"),
-      import("./firebase-config.js")
-    ]);
-    const app=getApps().length?getApp():initializeApp(configMod.firebaseConfig),db=getDatabase(app),params=new URLSearchParams(location.search);
+    const [
+  { initializeApp, getApps, getApp },
+  { initializeAppCheck, ReCaptchaEnterpriseProvider },
+  { getDatabase, ref, set, update, onValue, get, remove },
+  configMod
+] = await Promise.all([
+  import("https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js"),
+  import("https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js"),
+  import("https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js"),
+  import("./firebase-config.js")
+]);
+
+// 初始化 Firebase
+const app = getApps().length
+  ? getApp()
+  : initializeApp(configMod.firebaseConfig);
+
+// 初始化 Firebase App Check
+initializeAppCheck(app, {
+  provider: new ReCaptchaEnterpriseProvider(configMod.appCheckSiteKey),
+  isTokenAutoRefreshEnabled: true
+});
+
+// App Check 完成初始化後，再連接 Realtime Database
+const db = getDatabase(app);
+
+const params = new URLSearchParams(location.search);
     const randomRoom=()=>Array.from({length:5},()=>"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random()*32)]).join("");
     let roomId=params.get("room")||randomRoom();
     if(!params.get("room")){const u=new URL(location.href);u.searchParams.set("room",roomId);history.replaceState({},"",u)}
