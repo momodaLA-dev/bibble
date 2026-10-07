@@ -1,8 +1,18 @@
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
 import { getDatabase, ref, set, update, onValue, get, onDisconnect, runTransaction } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
-import { firebaseConfig } from "./firebase-config.js";
+import { firebaseConfig, appCheckSiteKey } from "./firebase-config.js";
 
-const app=getApps().length?getApp():initializeApp(firebaseConfig),db=getDatabase(app),$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+initializeAppCheck(app, {
+  provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+  isTokenAutoRefreshEnabled: true
+});
+
+const db = getDatabase(app);
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
 const roomId=new URLSearchParams(location.search).get("room");
 if(!roomId){document.body.innerHTML='<main class="glass mobile-card"><h2>找不到房號</h2><p>請重新掃描大螢幕上的 QR Code。</p></main>';throw new Error("Missing room")}
 
