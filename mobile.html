@@ -1,6 +1,12 @@
 <!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><meta name="theme-color" content="#07111f"><title>加入聖經問答</title><link rel="stylesheet" href="./styles.css"></head><body>
 <main class="app">
-<section id="join" class="glass mobile-card"><div class="muted">ROOM <strong id="roomLabel"></strong></div><h1>📖 加入聖經問答</h1><div id="modeHint" class="notice">讀取房間資訊中…</div><label>你的名字<input id="nameInput" maxlength="12" placeholder="例如：若瑩"></label><div id="teamPicker" class="team-picker hidden"><div class="muted">選擇隊伍</div><div class="mobile-choice-grid"><button id="pickA" class="secondary team-pick" data-team="A">A隊</button><button id="pickB" class="secondary team-pick" data-team="B">B隊</button></div></div><div id="joinMsg" class="muted"></div><button id="joinBtn" class="primary full">加入遊戲</button></section>
+<section id="join" class="glass mobile-card"><div class="muted">ROOM <strong id="roomLabel"></strong></div><h1>📖 加入聖經問答</h1><div id="modeHint" class="notice">讀取房間資訊中…</div><label>你的名字<input id="nameInput" maxlength="12" placeholder="例如：若瑩"></label><div id="teamPicker" class="team-picker hidden"><div class="muted">選擇隊伍</div><div class="mobile-choice-grid"><button id="pickA" class="secondary team-pick" data-team="A">A隊</button><button id="pickB" class="secondary team-pick" data-team="B">B隊</button></div></div><div id="inkColorPicker" class="ink-color-picker hidden"><div class="muted">選擇字的屬性</div><div class="ink-color-grid">
+<button type="button" data-ink-color="blue" class="ink-color-btn blue">藍</button>
+<button type="button" data-ink-color="red" class="ink-color-btn red">紅</button>
+<button type="button" data-ink-color="green" class="ink-color-btn green">綠</button>
+<button type="button" data-ink-color="black" class="ink-color-btn black">黑</button>
+<button type="button" data-ink-color="yellow" class="ink-color-btn yellow">黃</button>
+</div></div><div id="joinMsg" class="muted"></div><button id="joinBtn" class="primary full">加入遊戲</button></section>
 <section id="waiting" class="glass mobile-card hidden"><div class="big-icon">🎈</div><h1>加入成功</h1><h2 id="welcome"></h2><p id="myTeam" class="team-tag hidden"></p><p id="waitText" class="muted">等待主持人開始。</p></section>
 <section id="vote" class="mobile-card hidden"><div class="glass"><div id="mobileProgress" class="muted"></div><div id="mobileTimer" class="mobile-timer">⏱ 30 秒</div><h2 id="mobileQuestion"></h2><div class="mobile-choice-grid"><button id="voteA" class="mobile-choice choice-a">A</button><button id="voteB" class="mobile-choice choice-b">B</button><button id="voteC" class="mobile-choice choice-c">C</button><button id="voteD" class="mobile-choice choice-d">D</button></div><div id="voteMsg" class="status">請選擇答案</div><div id="mobileReference" class="scripture-ref hidden"></div></div></section>
 <section id="ox" class="mobile-card hidden"><div class="glass">
@@ -104,6 +110,43 @@
     <div id="dodgeEliminated" class="dodge-eliminated hidden">
       💥 你被撞到了，本局出局
       <small>可以繼續看大螢幕幫隊友加油</small>
+    </div>
+  </div>
+</section>
+
+<section id="inkpk" class="mobile-card hidden">
+  <div class="glass">
+    <div class="muted">✍️⚔️ 字戰 PK</div>
+    <div id="inkpkMobileTimer" class="mobile-timer">⏱ 15 秒</div>
+    <h2 id="inkpkMobileTitle">照著模板描寫</h2>
+    <div id="inkpkMyColor" class="inkpk-my-color"></div>
+
+    <div id="inkpkDrawPanel">
+      <div class="ink-canvas-wrap">
+        <canvas id="inkTemplateCanvas" width="320" height="320" aria-hidden="true"></canvas>
+        <canvas id="inkDrawCanvas" width="320" height="320" aria-label="描字畫布"></canvas>
+      </div>
+      <div class="ink-live-stats">
+        <div><span>戰力</span><strong id="inkLivePower">100</strong></div>
+        <div><span>完整度</span><strong id="inkLiveComplete">0%</strong></div>
+        <div><span>準確度</span><strong id="inkLiveAccuracy">100%</strong></div>
+      </div>
+      <button id="inkClearBtn" type="button" class="secondary full">清除重寫</button>
+    </div>
+
+    <div id="inkpkWaitPanel" class="hidden">
+      <div class="big-icon">⚔️</div>
+      <h2 id="inkpkWaitTitle">已完成描寫</h2>
+      <div id="inkpkWaitText" class="status">等待對手完成…</div>
+    </div>
+
+    <div id="inkpkBattlePanel" class="hidden">
+      <div class="ink-mobile-battle">
+        <div><b id="inkMyName">我</b><div class="inkpk-hp-shell"><div id="inkMyHpBar" class="inkpk-hp-bar"></div></div><span id="inkMyHpText"></span></div>
+        <div class="ink-mobile-vs">VS</div>
+        <div><b id="inkEnemyName">對手</b><div class="inkpk-hp-shell"><div id="inkEnemyHpBar" class="inkpk-hp-bar"></div></div><span id="inkEnemyHpText"></span></div>
+      </div>
+      <div id="inkMobileBattleMsg" class="status">字正在碰撞對戰！</div>
     </div>
   </div>
 </section>

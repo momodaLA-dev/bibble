@@ -31,14 +31,17 @@ let dodgeRoundTimer = null;
 let dodgeResolveTimer = null;
 let dodgeUiTimer = null;
 let dodgeResolving = false;
+let inkBattleTimer = null;
+let inkBattleBusy = false;
+let inkBattleClash = 0;
 
-const sections = ["home","onlineLobby","setup","game","tttGame","chainGame","dodgeGame","ranking"];
+const sections = ["home","onlineLobby","setup","game","tttGame","chainGame","dodgeGame","inkpkGame","ranking"];
 function show(id){
   sections.forEach(x=>$("#"+x).classList.toggle("hidden",x!==id));
   $("#homeBtn").classList.toggle("hidden",id==="home");
 }
 function currentSettings(){return {testament:$("#testamentSelect").value,book:$("#bookSelect").value,difficulty:$("#difficultySelect").value};}
-function isNetworkMode(){return mode==="team"||mode==="online"||mode==="ox"||mode==="ttt"||mode==="chain"||mode==="dodge";}
+function isNetworkMode(){return mode==="team"||mode==="online"||mode==="ox"||mode==="ttt"||mode==="chain"||mode==="dodge"||mode==="inkpk";}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 
 $$('.mode-card').forEach(btn=>btn.addEventListener('click',()=>selectMode(btn.dataset.mode)));
@@ -69,10 +72,12 @@ async function selectMode(nextMode){
 
 function updateLobbyLabels(){
   const team = mode==="team"||mode==="ttt";
-  $("#lobbyModeLabel").textContent=mode==="team"?"⚔️ 兩隊競賽":mode==="ox"?"🕹️ OX 走位搶答":mode==="ttt"?"⭕❌ 九宮格答題戰":mode==="chain"?"⛓️ 鎖鏈逃脫":mode==="dodge"?"💨 極限閃避":"📱 手機多人模式";
-  $("#waitingTitle").textContent=mode==="team"?"兩隊等待區":mode==="ox"?"OX 玩家等待區":mode==="ttt"?"九宮格兩隊等待區":mode==="chain"?"鎖鏈逃脫等待區":mode==="dodge"?"極限閃避等待區":"玩家等待區";
+  $("#lobbyModeLabel").textContent=mode==="team"?"⚔️ 兩隊競賽":mode==="ox"?"🕹️ OX 走位搶答":mode==="ttt"?"⭕❌ 九宮格答題戰":mode==="chain"?"⛓️ 鎖鏈逃脫":mode==="dodge"?"💨 極限閃避":mode==="inkpk"?"✍️⚔️ 字戰 PK":"📱 手機多人模式";
+  $("#waitingTitle").textContent=mode==="team"?"兩隊等待區":mode==="ox"?"OX 玩家等待區":mode==="ttt"?"九宮格兩隊等待區":mode==="chain"?"鎖鏈逃脫等待區":mode==="dodge"?"極限閃避等待區":mode==="inkpk"?"字戰 PK 等待區":"玩家等待區";
   $("#teamLobbySummary").classList.toggle("hidden",!team);
-  if($("#onlineSetupBtn"))$("#onlineSetupBtn").textContent=(mode==="chain"||mode==="dodge")?"開始遊戲":"設定題目";
+  $("#inkpkLobbyOptions")?.classList.toggle("hidden",mode!=="inkpk");
+  if($("#lobbyRuleText"))$("#lobbyRuleText").textContent=mode==="inkpk"?"字戰 PK：1 位真人會自動對 AI；2 位真人互相 PK；最多 2 位真人。":"人數不限，1 人也能加入；不補 AI，不限制奇數或偶數。";
+  if($("#onlineSetupBtn"))$("#onlineSetupBtn").textContent=(mode==="chain"||mode==="dodge"||mode==="inkpk")?"開始遊戲":"設定題目";
 }
 
 function openSetup(){
@@ -217,7 +222,7 @@ async function ensureNetworkMode(requestedMode){
     let roomId=params.get("room")||randomRoom();
     if(!params.get("room")){const u=new URL(location.href);u.searchParams.set("room",roomId);history.replaceState({},"",u)}
     $("#roomCode").textContent=roomId;
-    const roomRef=ref(db,`rooms/${roomId}`),metaRef=ref(db,`rooms/${roomId}/meta`),playersRef=ref(db,`rooms/${roomId}/players`),votesRoot=ref(db,`rooms/${roomId}/votes`),controlsRef=ref(db,`rooms/${roomId}/controls`),tttAnswerRef=ref(db,`rooms/${roomId}/tttAnswer`),tttBuzzRef=ref(db,`rooms/${roomId}/tttBuzz`);
+    const roomRef=ref(db,`rooms/${roomId}`),metaRef=ref(db,`rooms/${roomId}/meta`),playersRef=ref(db,`rooms/${roomId}/players`),votesRoot=ref(db,`rooms/${roomId}/votes`),controlsRef=ref(db,`rooms/${roomId}/controls`),tttAnswerRef=ref(db,`rooms/${roomId}/tttAnswer`),tttBuzzRef=ref(db,`rooms/${roomId}/tttBuzz`),inkpkRef=ref(db,`rooms/${roomId}/inkpk`);
     if(!(await get(metaRef)).exists())await set(metaRef,{status:"waiting",mode:requestedMode,questionCount:0,currentIndex:-1,roundEndsAt:0,teamNames:{A:"A隊",B:"B隊"},createdAt:Date.now()});
     else await update(metaRef,{mode:requestedMode,status:"waiting"});
 
@@ -235,6 +240,11 @@ async function ensureNetworkMode(requestedMode){
       const names=m.teamNames||{A:"A隊",B:"B隊"};
       $("#lobbyTeamAName").textContent=names.A||"A隊";$("#lobbyTeamBName").textContent=names.B||"B隊";
       if(m.status==="waiting"){if(!["setup","home"].some(id=>!$("#"+id).classList.contains("hidden")))show("onlineLobby");return;}
+      if(mode==="inkpk"&&m.status==="playing"){
+        show("inkpkGame");
+        await renderInkPkHost(db,ref,get,update,roomId,roomRef,metaRef,m);
+        return;
+      }
       if(mode==="dodge"&&m.status==="playing"){
         show("dodgeGame");
         renderDodgeHost(m);
@@ -260,6 +270,7 @@ async function ensureNetworkMode(requestedMode){
         if(mode==="ttt"){show("tttGame");await renderTttHost(db,ref,get,roomId,m);return;}
         if(mode==="chain"){stopChainGame();renderNetworkRanking();return;}
         if(mode==="dodge"){stopDodgeGame();renderNetworkRanking();return;}
+        if(mode==="inkpk"){stopInkBattle();show("inkpkGame");await renderInkPkHost(db,ref,get,update,roomId,roomRef,metaRef,m);return;}
         renderNetworkRanking();
       }
     });
@@ -276,13 +287,61 @@ async function ensureNetworkMode(requestedMode){
       const buzz=s.val();
       if(mode==="ttt"&&buzz&&!tttBuzzResolving)resolveTttBuzz(get,update,set,metaRef,tttBuzzRef,tttAnswerRef,buzz);
     });
+    const unInkPk=onValue(inkpkRef,async s=>{
+      if(mode!=="inkpk")return;
+      const data=s.val()||{};
+      if(networkState.meta.status==="playing"&&networkState.meta.inkpk?.phase==="draw"){
+        await maybeStartInkBattle(get,update,roomId,roomRef,metaRef,data);
+      }
+    });
 
-    $("#onlineSetupBtn").onclick=()=>mode==="chain"?networkApi?.startChain?.():mode==="dodge"?networkApi?.startDodge?.():openSetup();
+    $("#onlineSetupBtn").onclick=()=>mode==="chain"?networkApi?.startChain?.():mode==="dodge"?networkApi?.startDodge?.():mode==="inkpk"?networkApi?.startInkPk?.():openSetup();
     $("#newRoomBtn").onclick=()=>location.href=`${basePath()}index.html?room=${randomRoom()}`;
 
     networkApi={
       async setMode(next){mode=next;await update(metaRef,{mode:next,status:"waiting"});},
       async setTeamNames(names){await update(metaRef,{teamNames:names});},
+      async startInkPk(){
+        const humans=Object.entries(networkState.players||{}).filter(([,p])=>!p.ai);
+        if(humans.length<1||humans.length>2){alert("字戰 PK 支援 1 位真人對 AI，或 2 位真人 PK。");return;}
+        const missing=humans.filter(([,p])=>!p.inkColor);
+        if(missing.length){alert("請真人玩家先選擇屬性顏色。");return;}
+
+        stopInkBattle();
+        const difficulty=$("#inkpkDifficultySelect")?.value||"easy";
+        const dInfo=inkDifficultyInfo(difficulty);
+        const char=dInfo.pool[Math.floor(Math.random()*dInfo.pool.length)];
+        const now=Date.now();
+        const u={votes:null,questions:null,controls:null,inkpk:null,"players/__ai__":null};
+
+        humans.forEach(([id])=>{
+          u[`players/${id}/score`]=0;
+          u[`players/${id}/inkPower`]=100;
+        });
+
+        if(humans.length===1){
+          const colors=["blue","red","green","black","yellow"];
+          const aiColor=colors[Math.floor(Math.random()*colors.length)];
+          const completion=Number((0.7+Math.random()*0.3).toFixed(4));
+          const accuracy=completion;
+          const power=Number(Math.max(20,Math.min(200,100+completion*100-(1-accuracy)*100)).toFixed(2));
+          u["players/__ai__"]={name:"AI 電腦",score:0,inkColor:aiColor,joinedAt:now+1,ai:true,inkPower:power};
+          u.inkpk={submissions:{"__ai__":{
+            name:"AI 電腦",color:aiColor,power,completion,accuracy,
+            image:makeAiGlyphImage(char,aiColor),submittedAt:now+100,ai:true
+          }}};
+        }
+
+        u.meta={
+          status:"playing",mode:"inkpk",questionCount:0,currentIndex:-1,roundEndsAt:now+15000,
+          teamNames:{A:"A隊",B:"B隊"},createdAt:networkState.meta.createdAt||now,
+          inkpk:{
+            phase:"draw",char,difficulty,difficultyLabel:dInfo.label,difficultyMult:dInfo.mult,
+            drawEndsAt:now+15000,winner:"",clash:0,hp:{},vsAI:humans.length===1
+          }
+        };
+        await update(roomRef,u);
+      },
       async startDodge(){
         const ids=Object.keys(networkState.players||{});
         if(!ids.length){alert("請至少讓 1 位玩家加入後再開始。");return;}
@@ -362,13 +421,13 @@ async function ensureNetworkMode(requestedMode){
         else await update(metaRef,{status:"playing",currentIndex:n,roundEndsAt:Date.now()+currentRoundSeconds()*1000});
       },
       async restart(){
-        stopChainGame();stopDodgeGame();
-        const u={votes:null,questions:null,tttAnswer:null,tttBuzz:null,controls:null};
-        Object.entries(networkState.players).forEach(([id])=>u[`players/${id}/score`]=0);
+        stopChainGame();stopDodgeGame();stopInkBattle();
+        const u={votes:null,questions:null,tttAnswer:null,tttBuzz:null,controls:null,inkpk:null,"players/__ai__":null};
+        Object.entries(networkState.players).forEach(([id,p])=>{if(!p.ai)u[`players/${id}/score`]=0;});
         u["meta/status"]="waiting";u["meta/currentIndex"]=-1;u["meta/questionCount"]=0;u["meta/roundEndsAt"]=0;
         await update(roomRef,u);show("onlineLobby");
       },
-      stop(){unPlayers();unMeta();unVotes();unControls();unTttAnswer();unTttBuzz();stopOxMovement();stopChainGame();stopDodgeGame();}
+      stop(){unPlayers();unMeta();unVotes();unControls();unTttAnswer();unTttBuzz();unInkPk();stopOxMovement();stopChainGame();stopDodgeGame();stopInkBattle();}
     };
   }catch(err){
     $("#onlineLobby").innerHTML=`<div class="glass"><h2>無法啟動連線模式</h2><p class="muted">請確認網路連線與 Firebase 設定。單人競技仍可直接使用。</p><pre>${escapeHtml(err.message)}</pre></div>`;
@@ -596,6 +655,162 @@ async function resolveTttBuzz(get,update,set,metaRef,tttBuzzRef,tttAnswerRef,buz
 }
 
 
+
+const INK_DIFFICULTY={
+  easy:{label:"簡單",mult:1.00,pool:["光","愛","信","恩","道","羊"]},
+  normal:{label:"普通",mult:1.15,pool:["平安","盼望","生命","真理","恩典","福音"]},
+  hard:{label:"困難",mult:1.30,pool:["以馬內利","哈利路亞","伯利恆","加利利","耶路撒冷","客西馬尼"]},
+  heaven:{label:"上天堂",mult:1.50,pool:["愛是恆久忍耐","你們是世上的光","主是我的牧者","我就是道路真理生命","起初神創造天地"]}
+};
+function inkDifficultyInfo(key){return INK_DIFFICULTY[key]||INK_DIFFICULTY.easy;}
+function makeAiGlyphImage(text,color){
+  const fill=INK_COLOR_HEX[color]||"#111827";
+  const safe=String(text||"光").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
+  const len=[...String(text||"")].length;
+  const size=len<=1?220:len<=2?135:len<=4?86:len<=7?58:46;
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320"><rect width="320" height="320" rx="18" fill="white"/><text x="160" y="166" text-anchor="middle" dominant-baseline="middle" font-size="${size}" font-weight="900" font-family="sans-serif" fill="${fill}">${safe}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+const INK_COLOR_HEX={blue:"#3b82f6",red:"#ef4444",green:"#22c55e",black:"#111827",yellow:"#facc15"};
+function inkColorName(c){return {blue:"藍色",red:"紅色",green:"綠色",black:"黑色",yellow:"黃色"}[c]||c;}
+function inkColorMultiplier(attacker,defender){
+  if(attacker==="black"){
+    if(defender==="yellow")return 1.4;
+    return 1.5;
+  }
+  if(defender==="black"){
+    return attacker==="yellow"?1.5:1.5;
+  }
+  if(attacker==="yellow"){
+    return 1.0;
+  }
+  if(defender==="yellow"&&["blue","red","green"].includes(attacker)){
+    return 0.5;
+  }
+  const beats={blue:"red",red:"green",green:"blue"};
+  if(beats[attacker]===defender)return 1.4;
+  if(beats[defender]===attacker)return 0.8;
+  return 1.0;
+}
+function stopInkBattle(){
+  if(inkBattleTimer){clearInterval(inkBattleTimer);inkBattleTimer=null;}
+  inkBattleBusy=false;inkBattleClash=0;
+}
+function setInkFighterUi(slot,p,sub,hp,maxHp,enemyColor){
+  const n=slot===1?1:2;
+  $(`#inkpkName${n}`).textContent=p?.name||`玩家 ${n}`;
+  const dot=$(`#inkpkColor${n}`);dot.style.background=INK_COLOR_HEX[p?.inkColor]||"#999";dot.title=inkColorName(p?.inkColor);
+  const pct=Math.max(0,Math.min(100,(Number(hp||0)/Math.max(1,Number(maxHp||1)))*100));
+  $(`#inkpkHp${n}`).style.width=`${pct}%`;
+  $(`#inkpkHpText${n}`).textContent=`戰力 ${Math.max(0,Math.round(Number(hp||0)))}`;
+  $(`#inkpkComplete${n}`).textContent=`完整度 ${Math.round(Number(sub?.completion||0)*100)}%`;
+  const img=$(`#inkpkGlyph${n}`);
+  if(sub?.image){img.src=sub.image;img.classList.remove("hidden");}else{img.removeAttribute("src");img.classList.add("hidden");}
+  const cm=inkColorMultiplier(p?.inkColor,enemyColor);
+  const dm=Number(networkState.meta?.inkpk?.difficultyMult||1);
+  const final=cm*Number(sub?.completion||0)*dm;
+  $(`#inkpkMult${n}`).textContent=`屬性 ${cm.toFixed(2)} × 完整度 ${Number(sub?.completion||0).toFixed(2)} × 難度 ${dm.toFixed(2)} ＝ 攻擊 ${final.toFixed(2)}×`;
+}
+async function renderInkPkHost(db,ref,get,update,roomId,roomRef,metaRef,m){
+  const ip=m.inkpk||{},phase=ip.phase||"draw";
+  $("#inkpkHostChar").textContent=ip.char||"勇";
+  $("#inkpkHostChar").style.fontSize=[...(ip.char||"勇")].length<=2?"56px":[...(ip.char||"勇")].length<=5?"34px":"22px";
+  $("#inkpkRuleHint").textContent=`難度：${ip.difficultyLabel||"簡單"}（${Number(ip.difficultyMult||1).toFixed(2)}×）｜15 秒描寫；完整度會直接乘上攻擊倍率${ip.vsAI?"｜本局為 AI 對戰":""}`;
+  $("#inkpkWinner").classList.add("hidden");
+  $("#inkpkRestartBtn").classList.add("hidden");
+  const ps=(await get(ref(db,`rooms/${roomId}/players`))).val()||{};
+  const ids=Object.keys(ps).sort((a,b)=>(ps[a].joinedAt||0)-(ps[b].joinedAt||0));
+  const subs=(await get(ref(db,`rooms/${roomId}/inkpk/submissions`))).val()||{};
+  const a=ids[0],b=ids[1];
+  if(!a||!b){
+    $("#inkpkHostStatus").textContent="等待兩位玩家加入";
+    return;
+  }
+  const hp=ip.hp||{};
+  const maxHp=ip.maxHp||{};
+  setInkFighterUi(1,ps[a],subs[a],phase==="draw"?(subs[a]?.power||100):(hp[a]??subs[a]?.power??100),maxHp[a]??subs[a]?.power??100,ps[b]?.inkColor);
+  setInkFighterUi(2,ps[b],subs[b],phase==="draw"?(subs[b]?.power||100):(hp[b]??subs[b]?.power??100),maxHp[b]??subs[b]?.power??100,ps[a]?.inkColor);
+
+  if(phase==="draw"){
+    const done=Object.keys(subs).filter(id=>ids.includes(id)).length;
+    $("#inkpkHostStatus").textContent=`描字中：${done}/2 已完成`;
+    $("#inkpkClashText").textContent="15 秒描寫中";
+    return;
+  }
+  if(phase==="battle"){
+    $("#inkpkHostStatus").textContent="⚔️ 字正在碰撞對戰！";
+    $("#inkpkClashText").textContent=`第 ${Number(ip.clash||0)+1} 次碰撞`;
+    if(!inkBattleTimer)startInkBattleLoop(get,update,roomId,roomRef,metaRef,ids);
+    return;
+  }
+  if(phase==="ended"){
+    stopInkBattle();
+    const winner=ip.winner;
+    $("#inkpkHostStatus").textContent="對戰結束";
+    $("#inkpkClashText").textContent="FINISH";
+    $("#inkpkWinner").textContent=winner==="draw"?"🤝 平手！":`🏆 ${ps[winner]?.name||"玩家"} 獲勝！`;
+    $("#inkpkWinner").classList.remove("hidden");
+    $("#inkpkRestartBtn").classList.remove("hidden");
+  }
+}
+async function maybeStartInkBattle(get,update,roomId,roomRef,metaRef,data){
+  if(networkState.meta.inkpk?.phase!=="draw")return;
+  const ps=(await get(ref(db,`rooms/${roomId}/players`))).val()||{};
+  const ids=Object.keys(ps).sort((a,b)=>(ps[a].joinedAt||0)-(ps[b].joinedAt||0));
+  if(ids.length!==2)return;
+  const subs=data.submissions||{};
+  if(!subs[ids[0]]||!subs[ids[1]])return;
+  const hp={},maxHp={};
+  ids.forEach(id=>{
+    const v=Math.max(1,Number(subs[id].power||100));
+    hp[id]=v;maxHp[id]=v;
+  });
+  await update(metaRef,{"inkpk/phase":"battle","inkpk/hp":hp,"inkpk/maxHp":maxHp,"inkpk/clash":0});
+}
+function startInkBattleLoop(get,update,roomId,roomRef,metaRef,ids){
+  stopInkBattle();inkBattleClash=0;
+  inkBattleTimer=setInterval(async()=>{
+    if(inkBattleBusy||mode!=="inkpk"||networkState.meta.status!=="playing"||networkState.meta.inkpk?.phase!=="battle")return;
+    inkBattleBusy=true;
+    try{
+      const [pSnap,sSnap,mSnap]=await Promise.all([
+        get(ref(db,`rooms/${roomId}/players`)),
+        get(ref(db,`rooms/${roomId}/inkpk/submissions`)),
+        get(metaRef)
+      ]);
+      const ps=pSnap.val()||{},subs=sSnap.val()||{},meta=mSnap.val()||{},ip=meta.inkpk||{};
+      const [a,b]=ids;
+      if(!a||!b||!subs[a]||!subs[b])return;
+      let ha=Number(ip.hp?.[a]??subs[a].power??100),hb=Number(ip.hp?.[b]??subs[b].power??100);
+      const ca=Number(subs[a].completion||0),cb=Number(subs[b].completion||0);
+      const dm=Number(ip.difficultyMult||1);
+      const ma=inkColorMultiplier(ps[a]?.inkColor,ps[b]?.inkColor)*ca*dm;
+      const mb=inkColorMultiplier(ps[b]?.inkColor,ps[a]?.inkColor)*cb*dm;
+      const dmgA=8*ma,dmgB=8*mb;
+      const beforeA=ha,beforeB=hb;
+      hb=Math.max(0,hb-dmgA);
+      ha=Math.max(0,ha-dmgB);
+      inkBattleClash=Number(ip.clash||0)+1;
+      $("#inkpkFighter1").classList.add("ink-clash-left");
+      $("#inkpkFighter2").classList.add("ink-clash-right");
+      setTimeout(()=>{$("#inkpkFighter1")?.classList.remove("ink-clash-left");$("#inkpkFighter2")?.classList.remove("ink-clash-right");},260);
+      $("#inkpkClashText").textContent=`💥 -${dmgA.toFixed(1)} / -${dmgB.toFixed(1)}`;
+
+      const u={"inkpk/hp":{[a]:ha,[b]:hb},"inkpk/clash":inkBattleClash};
+      let winner="";
+      if(ha<=0||hb<=0||inkBattleClash>=40){
+        if(ha<=0&&hb<=0)winner="draw";
+        else if(ha<=0)winner=b;
+        else if(hb<=0)winner=a;
+        else if(ha===hb)winner="draw";
+        else winner=ha>hb?a:b;
+        u["inkpk/phase"]="ended";u["inkpk/winner"]=winner;
+      }
+      await update(metaRef,u);
+      if(winner)stopInkBattle();
+    }finally{inkBattleBusy=false;}
+  },850);
+}
 const DODGE_ACTIONS=[
   {action:"left",icon:"⬅️",text:"往左閃！",from:"right"},
   {action:"right",icon:"➡️",text:"往右閃！",from:"left"},
@@ -1046,3 +1261,5 @@ $("#tttBackLobbyBtn")?.addEventListener("click",()=>networkApi?.restart?.());
 $("#chainRestartBtn")?.addEventListener("click",()=>networkApi?.restart?.());
 
 $("#dodgeRestartBtn")?.addEventListener("click",()=>networkApi?.restart?.());
+
+$("#inkpkRestartBtn")?.addEventListener("click",()=>networkApi?.restart?.());

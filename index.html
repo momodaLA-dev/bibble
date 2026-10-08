@@ -49,6 +49,10 @@
           <span class="mode-icon">💨</span><b>極限閃避</b>
           <small>看大螢幕提示，用手機上下左右閃避或小跳躍；撞到障礙就出局，速度會越來越快</small>
         </button>
+        <button class="mode-card" data-mode="inkpk">
+          <span class="mode-icon">✍️⚔️</span><b>字戰 PK</b>
+          <small>兩人網路對戰・15 秒描字累積戰力・完整度影響屬性攻擊倍率</small>
+        </button>
       </div>
     </section>
 
@@ -60,6 +64,17 @@
         <div id="joinUrl" class="join-url"></div>
         <div class="room-line">房號 <strong id="roomCode">-----</strong></div>
         <div class="button-row"><button id="onlineSetupBtn" class="primary">設定題目</button><button id="newRoomBtn" class="secondary">建立新房</button></div>
+        <div id="inkpkLobbyOptions" class="inkpk-lobby-options hidden">
+          <label>字戰難度
+            <select id="inkpkDifficultySelect">
+              <option value="easy">🟢 簡單｜1.00×</option>
+              <option value="normal">🟡 普通｜1.15×</option>
+              <option value="hard">🔴 困難｜1.30×</option>
+              <option value="heaven">👼 上天堂｜1.50×</option>
+            </select>
+          </label>
+          <div class="muted">1 位真人＝自動加入 AI；2 位真人＝真人 PK。AI 完成度每局隨機 70%～100%。</div>
+        </div>
       </div>
       <div class="glass">
         <div class="title-row"><h2 id="waitingTitle">玩家等待區</h2><strong id="playerCount">0 人</strong></div>
@@ -68,7 +83,7 @@
           <div><b id="lobbyTeamBName">B隊</b><strong id="teamBCount">0 人</strong></div>
         </div>
         <div id="players" class="player-wrap"></div>
-        <p class="muted">人數不限，1 人也能加入；不補 AI，不限制奇數或偶數。</p>
+        <p id="lobbyRuleText" class="muted">人數不限，1 人也能加入；不補 AI，不限制奇數或偶數。</p>
       </div>
     </section>
 
@@ -254,6 +269,48 @@
       <div class="button-row center">
         <button id="dodgeRestartBtn" class="primary hidden">再玩一次</button>
       </div>
+    </section>
+
+
+    <section id="inkpkGame" class="glass hidden">
+      <div class="inkpk-head">
+        <div>
+          <div class="eyebrow">✍️⚔️ INK BATTLE</div>
+          <h2>字戰 PK</h2>
+          <div id="inkpkHostStatus" class="status">等待兩位玩家</div>
+        </div>
+        <div class="inkpk-char-box">
+          <small>本局描寫</small>
+          <strong id="inkpkHostChar">勇</strong>
+        </div>
+      </div>
+
+      <div class="inkpk-versus">
+        <article class="inkpk-fighter" id="inkpkFighter1">
+          <div class="inkpk-player-top"><b id="inkpkName1">玩家 1</b><span id="inkpkColor1" class="ink-color-dot"></span></div>
+          <div class="inkpk-hp-shell"><div id="inkpkHp1" class="inkpk-hp-bar"></div></div>
+          <div class="inkpk-hp-text"><span id="inkpkHpText1">戰力 --</span><span id="inkpkComplete1">完整度 --</span></div>
+          <div class="inkpk-glyph-stage"><img id="inkpkGlyph1" alt="玩家一描寫的字"></div>
+          <div id="inkpkMult1" class="inkpk-mult">攻擊倍率 --</div>
+        </article>
+
+        <div class="inkpk-center">
+          <div class="inkpk-vs">VS</div>
+          <div id="inkpkClashText" class="inkpk-clash-text">準備中</div>
+        </div>
+
+        <article class="inkpk-fighter" id="inkpkFighter2">
+          <div class="inkpk-player-top"><b id="inkpkName2">玩家 2</b><span id="inkpkColor2" class="ink-color-dot"></span></div>
+          <div class="inkpk-hp-shell"><div id="inkpkHp2" class="inkpk-hp-bar"></div></div>
+          <div class="inkpk-hp-text"><span id="inkpkHpText2">戰力 --</span><span id="inkpkComplete2">完整度 --</span></div>
+          <div class="inkpk-glyph-stage"><img id="inkpkGlyph2" alt="玩家二描寫的字"></div>
+          <div id="inkpkMult2" class="inkpk-mult">攻擊倍率 --</div>
+        </article>
+      </div>
+
+      <div id="inkpkRuleHint" class="notice">兩位玩家都完成 15 秒描字後，字會自動進場碰撞對戰。</div>
+      <div id="inkpkWinner" class="ttt-winner hidden"></div>
+      <div class="button-row center"><button id="inkpkRestartBtn" class="primary hidden">再玩一次</button></div>
     </section>
 
     <section id="ranking" class="glass hidden">
