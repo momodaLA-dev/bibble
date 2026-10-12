@@ -16,8 +16,8 @@ const COLOR_NAME={blue:"藍色",red:"紅色",green:"綠色",black:"黑色",yello
 const DIFF={
   easy:{label:"簡單",mult:1.00,ai:[0.65,0.78],pool:["光","愛","信","恩","道","羊"]},
   normal:{label:"普通",mult:1.15,ai:[0.72,0.85],pool:["平安","盼望","生命","真理","恩典","福音"]},
-  hard:{label:"困難",mult:1.30,ai:[0.80,0.92],pool:["以馬內利","哈利路亞","伯利恆","加利利","耶路撒冷","客西馬尼"]},
-  heaven:{label:"上天堂",mult:1.50,ai:[0.88,1.00],pool:["愛是恆久忍耐","你們是世上的光","主是我的牧者","我就是道路真理生命","起初神創造天地"]}
+  hard:{label:"困難",mult:1.30,ai:[0.80,0.92],pool:["伯利恆","加利利","拿撒勒","約書亞","撒母耳","以利亞"]},
+  heaven:{label:"上天堂",mult:1.50,ai:[0.88,1.00],pool:["尼布甲尼撒","撒馬利亞人","亞哈隨魯王","耶路撒冷城","加利利海邊","亞利馬太人","尼尼微大城","十二個門徒","生命樹的果"]}
 };
 
 const randomRoom=()=>Array.from({length:5},()=>"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random()*32)]).join("");
