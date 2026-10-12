@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07111f">
+<title>誰是臥底</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<main class="app">
+<header class="header">
+  <div><div class="brand">🕵️ 誰是臥底</div><div class="muted">秘密角色・輪流描述・手機投票</div></div>
+  <a class="ghost" href="./index.html">⌂ 回首頁</a>
+</header>
+
+<section id="ucLobby" class="grid2">
+  <div class="glass">
+    <div class="eyebrow">UNDERCOVER</div>
+    <h2>掃碼加入</h2>
+    <div id="ucQr" class="qr-box"></div>
+    <div id="ucJoinUrl" class="join-url"></div>
+    <div class="room-line">房號 <strong id="ucRoomCode">-----</strong></div>
+    <div class="setup-grid">
+      <label>題目範圍
+        <select id="ucCategory">
+          <option value="all">全部 100 題</option>
+          <option value="人物">人物</option>
+          <option value="地點">地點</option>
+          <option value="物件">物件</option>
+          <option value="事件">事件</option>
+          <option value="教導">教導</option>
+          <option value="比喻">比喻</option>
+          <option value="節期/禮儀">節期／禮儀</option>
+          <option value="經卷">經卷</option>
+          <option value="象徵">象徵</option>
+        </select>
+      </label>
+      <label>臥底人數
+        <select id="ucUndercoverCount">
+          <option value="auto" selected>自動（3–6人：1位；7人以上：2位）</option>
+          <option value="1">1 位</option>
+          <option value="2">2 位</option>
+        </select>
+      </label>
+    </div>
+    <div class="button-row"><button id="ucStartBtn" class="primary">開始分配秘密詞</button><button id="ucNewRoomBtn" class="secondary">建立新房</button></div>
+  </div>
+  <div class="glass">
+    <div class="title-row"><h2>玩家等待區</h2><strong id="ucPlayerCount">0 人</strong></div>
+    <div id="ucLobbyPlayers" class="player-wrap"></div>
+    <p class="muted">至少 3 人。每人只會在自己的手機看到秘密詞，大螢幕不顯示答案。</p>
+  </div>
+</section>
+
+<section id="ucDescribe" class="glass hidden">
+  <div class="eyebrow">描述階段</div>
+  <h1>不要直接說出秘密詞</h1>
+  <div id="ucCategoryLabel" class="notice"></div>
+  <h2>發言順序</h2>
+  <div id="ucOrder" class="uc-order"></div>
+  <div class="button-row center"><button id="ucVoteBtn" class="primary">開始手機投票</button></div>
+</section>
+
+<section id="ucVoting" class="glass hidden">
+  <div class="eyebrow">投票階段</div>
+  <h1>誰最像臥底？</h1>
+  <div id="ucVoteProgress" class="notice">0 / 0 已投票</div>
+  <div id="ucVoteBars" class="uc-vote-bars"></div>
+  <div class="button-row center"><button id="ucRevealBtn" class="primary">公布結果</button></div>
+</section>
+
+<section id="ucResult" class="glass hidden">
+  <div id="ucResultIcon" class="big-icon">🕵️</div>
+  <h1 id="ucResultTitle">結果</h1>
+  <div id="ucResultDetail" class="notice"></div>
+  <div id="ucRevealWords" class="uc-reveal-words"></div>
+  <div id="ucFinalVotes" class="uc-vote-bars"></div>
+  <button id="ucAgainBtn" class="primary">再玩一題</button>
+</section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script type="module" src="./undercover.js"></script>
+</body>
+</html>

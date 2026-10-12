@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07111f">
+<title>手機瞄準射擊</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<main class="app">
+<header class="header">
+  <div><div class="brand">🎯 手機瞄準射擊</div><div class="muted">大衛投石挑戰・手機傾斜控制準星・點擊投石</div></div>
+  <a class="ghost" href="./index.html">⌂ 回首頁</a>
+</header>
+
+<section id="shootLobby" class="grid2">
+  <div class="glass">
+    <div class="eyebrow">DAVID SLING CHALLENGE</div>
+    <h2>掃碼加入</h2>
+    <div id="shootQr" class="qr-box"></div>
+    <div id="shootJoinUrl" class="join-url"></div>
+    <div class="room-line">房號 <strong id="shootRoomCode">-----</strong></div>
+    <div class="setup-grid">
+      <label>遊戲時間
+        <select id="shootDuration">
+          <option value="30">30 秒</option>
+          <option value="45" selected>45 秒</option>
+          <option value="60">60 秒</option>
+        </select>
+      </label>
+      <label>目標移動速度
+        <select id="shootSpeed">
+          <option value="2800">慢</option>
+          <option value="2200" selected>普通</option>
+          <option value="1600">快</option>
+        </select>
+      </label>
+    </div>
+    <div class="button-row"><button id="shootStartBtn" class="primary">開始遊戲</button><button id="shootNewRoomBtn" class="secondary">建立新房</button></div>
+  </div>
+  <div class="glass">
+    <div class="title-row"><h2>玩家等待區</h2><strong id="shootPlayerCount">0 人</strong></div>
+    <div id="shootLobbyPlayers" class="player-wrap"></div>
+    <p class="muted">建議 2～12 人。手機需允許動作感應；不支援時可用手機上的方向按鈕。</p>
+  </div>
+</section>
+
+<section id="shootGame" class="glass hidden">
+  <div class="title-row">
+    <div><div class="eyebrow">TARGET ARENA</div><h2>投石挑戰</h2></div>
+    <div><strong id="shootTimer">⏱ 45.0 秒</strong></div>
+  </div>
+  <div id="shootArena" class="shoot-arena">
+    <div class="shoot-bg-giant" aria-hidden="true">🛡️</div>
+    <div id="shootTarget" class="shoot-target">
+      <div class="shoot-ring ring-3"></div>
+      <div class="shoot-ring ring-2"></div>
+      <div class="shoot-ring ring-1"></div>
+      <div class="shoot-bull">100</div>
+    </div>
+    <div id="shootCrosshairs"></div>
+    <div id="shootMarkers"></div>
+  </div>
+  <div class="shoot-score-legend"><span>🎯 中心 100</span><span>⭕ 內圈 60</span><span>◯ 外圈 30</span><span>空白 0</span></div>
+  <div id="shootScoreboard" class="shoot-scoreboard"></div>
+</section>
+
+<section id="shootEnd" class="glass hidden">
+  <div class="big-icon">🏆</div>
+  <h1>投石挑戰結束</h1>
+  <div id="shootFinalRanking" class="ranking-list"></div>
+  <button id="shootAgainBtn" class="primary">再玩一次</button>
+</section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script type="module" src="./shoot.js"></script>
+</body>
+</html>
