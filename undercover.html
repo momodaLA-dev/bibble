@@ -38,9 +38,31 @@
       </label>
       <label>臥底人數
         <select id="ucUndercoverCount">
-          <option value="auto" selected>自動（3–6人：1位；7人以上：2位）</option>
+          <option value="1" selected>1 位</option>
+          <option value="2">2 位</option>
+          <option value="3">3 位</option>
+          <option value="4">4 位</option>
+          <option value="5">5 位</option>
+          <option value="6">6 位</option>
+          <option value="7">7 位</option>
+          <option value="8">8 位</option>
+          <option value="9">9 位</option>
+          <option value="10">10 位</option>
+        </select>
+      </label>
+      <label>白板人數
+        <select id="ucBlankCount">
+          <option value="0" selected>0 位</option>
           <option value="1">1 位</option>
           <option value="2">2 位</option>
+          <option value="3">3 位</option>
+          <option value="4">4 位</option>
+          <option value="5">5 位</option>
+          <option value="6">6 位</option>
+          <option value="7">7 位</option>
+          <option value="8">8 位</option>
+          <option value="9">9 位</option>
+          <option value="10">10 位</option>
         </select>
       </label>
     </div>
@@ -49,16 +71,18 @@
   <div class="glass">
     <div class="title-row"><h2>玩家等待區</h2><strong id="ucPlayerCount">0 人</strong></div>
     <div id="ucLobbyPlayers" class="player-wrap"></div>
-    <p class="muted">至少 3 人。每人只會在自己的手機看到秘密詞，大螢幕不顯示答案。</p>
+    <p class="muted">至少 3 人。可自選 1～10 位臥底與 0～10 位白板；白板手機的秘密詞區會完全空白。</p>
   </div>
 </section>
 
 <section id="ucDescribe" class="glass hidden">
-  <div class="eyebrow">描述階段</div>
-  <h1>不要直接說出秘密詞</h1>
+  <div class="eyebrow">自由發言階段</div>
+  <h1>大家可以自由決定誰先說</h1>
   <div id="ucCategoryLabel" class="notice"></div>
-  <h2>發言順序</h2>
-  <div id="ucOrder" class="uc-order"></div>
+  <div id="ucSpeechProgress" class="notice">0 / 0 已發言</div>
+  <h2>玩家號碼</h2>
+  <p class="muted">亮著＝還沒發言；玩家在手機按「發言完畢」後，該號碼會自動暗掉。</p>
+  <div id="ucOrder" class="uc-number-board"></div>
   <div class="button-row center"><button id="ucVoteBtn" class="primary">開始手機投票</button></div>
 </section>
 

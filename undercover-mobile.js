@@ -18,24 +18,54 @@ async function join(){
   const pr=ref(db,`undercoverRooms/${roomId}/players/${pid}`);await set(pr,{name,joinedAt:Date.now(),voted:false});onDisconnect(pr).remove();
   $("#umWelcome").textContent=name;show("umWait");
 }
-onValue(ref(db,`undercoverRooms/${roomId}/players`),s=>{players=s.val()||{};if(meta.status==="voting")renderVoteButtons();});
+onValue(ref(db,`undercoverRooms/${roomId}/players`),s=>{players=s.val()||{};if(meta.status==="voting")renderVoteButtons();if(meta.status==="describe"&&pid)refreshSpeechButton();});
 onValue(ref(db,`undercoverRooms/${roomId}/meta`),async s=>{meta=s.val()||{};await renderState();});
 async function renderState(){
   if(!pid){show("umJoin");return;}
   if(meta.status==="waiting"){show("umWait");$("#umWelcome").textContent=name;return;}
   if(meta.status==="describe"){
     const sec=(await get(ref(db,`undercoverRooms/${roomId}/secrets/${pid}`))).val();
-    $("#umCategory").textContent=`類別：${sec?.category||"聖經"}`;$("#umWord").textContent=sec?.word||"？？？";
-    const idx=(meta.order||[]).indexOf(pid);$("#umOrderHint").textContent=idx>=0?`你是第 ${idx+1} 位發言。描述時不要直接說出這個詞。`:"請依大螢幕順序發言。";
-    show("umSecret");return;
+    const p=players[pid]||(await get(ref(db,`undercoverRooms/${roomId}/players/${pid}`))).val()||{};
+    const isBlank=sec?.role==="blank";
+    $("#umPlayerNumber").textContent=sec?.playerNumber||p.playerNumber||"--";
+    $("#umCategory").textContent=isBlank?"":`類別：${sec?.category||"聖經"}`;
+    $("#umWord").textContent=isBlank?"":(sec?.word||"");
+    hideSecret();
+    $("#umOrderHint").textContent=isBlank
+      ?"你是白板：查看區會保持空白。請根據其他人的描述臨場發揮。"
+      :"按住「查看身分」才能看到秘密詞；放開後會立即隱藏。";
+    show("umSecret");
+    refreshSpeechButton();
+    return;
   }
   if(meta.status==="voting"){show("umVote");renderVoteButtons();return;}
   if(meta.status==="result"){
-    show("umEnd");const under=new Set(meta.undercoverIds||[]),amUnder=under.has(pid);
-    $("#umEndIcon").textContent=amUnder?"🕵️":"🎭";
-    $("#umEndTitle").textContent=amUnder?"你是臥底":"你是平民";
+    show("umEnd");
+    const under=new Set(meta.undercoverIds||[]),blank=new Set(meta.blankIds||[]);
+    const amUnder=under.has(pid),amBlank=blank.has(pid);
+    $("#umEndIcon").textContent=amBlank?"⬜":amUnder?"🕵️":"🎭";
+    $("#umEndTitle").textContent=amBlank?"你是白板":amUnder?"你是臥底":"你是平民";
     $("#umEndDetail").textContent=`平民詞：${meta.civilian||""}｜臥底詞：${meta.undercover||""}`;
   }
+}
+function showSecret(){
+  $("#umSecretPeek").classList.remove("uc-secret-hidden");
+}
+function hideSecret(){
+  $("#umSecretPeek").classList.add("uc-secret-hidden");
+}
+function refreshSpeechButton(){
+  const p=players[pid]||{};
+  const btn=$("#umSpokenBtn");
+  if(!btn)return;
+  btn.disabled=!!p.spoken;
+  btn.textContent=p.spoken?"✅ 已發言":"✅ 發言完畢";
+}
+async function markSpoken(){
+  if(!pid||meta.status!=="describe")return;
+  await update(ref(db,`undercoverRooms/${roomId}/players/${pid}`),{spoken:true,spokenAt:Date.now()});
+  $("#umOrderHint").textContent="已標記發言完畢，大螢幕上的你的號碼已暗掉。";
+  refreshSpeechButton();
 }
 function renderVoteButtons(){
   const box=$("#umVoteButtons");if(!box)return;
@@ -50,4 +80,10 @@ async function vote(targetId){
   $("#umVoteMsg").textContent=`你已投給 ${players[targetId]?.name||"玩家"}`;$("#umVoteButtons").querySelectorAll("button").forEach(b=>b.disabled=true);
 }
 $("#umJoinBtn").onclick=join;
+const revealBtn=$("#umRevealBtn");
+["pointerdown","touchstart","mousedown"].forEach(ev=>revealBtn?.addEventListener(ev,e=>{e.preventDefault();showSecret();}));
+["pointerup","pointercancel","pointerleave","touchend","touchcancel","mouseup"].forEach(ev=>revealBtn?.addEventListener(ev,e=>{e.preventDefault();hideSecret();}));
+$("#umSpokenBtn")?.addEventListener("click",markSpoken);
+window.addEventListener("blur",hideSecret);
+document.addEventListener("visibilitychange",()=>{if(document.hidden)hideSecret();});
 if(pid){name=sessionStorage.getItem(`uc_name_${roomId}`)||"";$("#umWelcome").textContent=name;}

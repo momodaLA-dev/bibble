@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#07111f">
+<title>誰是臥底｜手機直接開房</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<main class="app uc-phone-app">
+<header class="header">
+  <div>
+    <div class="brand">📱🕵️ 誰是臥底｜手機直接開房</div>
+    <div class="muted">不用電腦・手機建立房間・所有玩家同步遊玩</div>
+  </div>
+  <a class="ghost" href="./index.html">⌂ 回首頁</a>
+</header>
+
+<section id="upEntry" class="glass mobile-card">
+  <div class="eyebrow">MOBILE UNDERCOVER</div>
+  <h1>建立或加入房間</h1>
+  <label>你的名字
+    <input id="upName" maxlength="12" placeholder="例如：若瑩">
+  </label>
+
+  <div id="upCreateOptions" class="uc-phone-create">
+    <label>題目範圍
+      <select id="upCategory">
+        <option value="all">全部 100 題</option>
+        <option value="人物">人物</option>
+        <option value="地點">地點</option>
+        <option value="物件">物件</option>
+        <option value="事件">事件</option>
+        <option value="教導">教導</option>
+        <option value="比喻">比喻</option>
+        <option value="節期/禮儀">節期／禮儀</option>
+        <option value="經卷">經卷</option>
+        <option value="象徵">象徵</option>
+      </select>
+    </label>
+    <div class="setup-grid">
+      <label>臥底人數
+        <select id="upUndercoverCount"></select>
+      </label>
+      <label>白板人數
+        <select id="upBlankCount"></select>
+      </label>
+    </div>
+    <button id="upCreateBtn" class="primary full">建立房間</button>
+  </div>
+
+  <div class="pk-or">或</div>
+
+  <label>輸入房號
+    <input id="upRoomInput" maxlength="5" placeholder="例如 A7K9P" autocapitalize="characters">
+  </label>
+  <button id="upJoinBtn" class="secondary full">加入房間</button>
+  <div id="upEntryMsg" class="status"></div>
+</section>
+
+<section id="upLobby" class="glass mobile-card hidden">
+  <div class="title-row">
+    <div>
+      <div class="eyebrow">等待區</div>
+      <h2>房號 <strong id="upRoomCode">-----</strong></h2>
+    </div>
+    <strong id="upPlayerCount">0 人</strong>
+  </div>
+
+  <div id="upHostSettings" class="uc-phone-host-box hidden">
+    <div class="setup-grid">
+      <label>題目範圍
+        <select id="upLobbyCategory">
+          <option value="all">全部 100 題</option>
+          <option value="人物">人物</option>
+          <option value="地點">地點</option>
+          <option value="物件">物件</option>
+          <option value="事件">事件</option>
+          <option value="教導">教導</option>
+          <option value="比喻">比喻</option>
+          <option value="節期/禮儀">節期／禮儀</option>
+          <option value="經卷">經卷</option>
+          <option value="象徵">象徵</option>
+        </select>
+      </label>
+      <label>臥底人數<select id="upLobbyUndercover"></select></label>
+      <label>白板人數<select id="upLobbyBlank"></select></label>
+    </div>
+  </div>
+
+  <div class="pk-share-grid">
+    <div id="upQr" class="qr-box"></div>
+    <div>
+      <div class="muted">其他玩家可掃 QR Code、點分享連結，或輸入房號加入。</div>
+      <div id="upJoinLink" class="join-url"></div>
+      <button id="upCopyBtn" class="secondary full">複製加入連結</button>
+    </div>
+  </div>
+
+  <div id="upLobbyPlayers" class="player-wrap"></div>
+  <div id="upLobbyRule" class="notice"></div>
+  <button id="upStartBtn" class="primary full hidden">開始分配身分</button>
+  <div id="upLobbyMsg" class="status">等待玩家加入…</div>
+</section>
+
+<section id="upDescribe" class="glass mobile-card hidden">
+  <div class="eyebrow">自由發言</div>
+  <div class="uc-player-number-wrap">
+    <span>你的號碼</span>
+    <strong id="upPlayerNumber">--</strong>
+  </div>
+
+  <div id="upNumberBoard" class="uc-number-board"></div>
+  <div id="upSpeechProgress" class="notice">0 / 0 已發言</div>
+
+  <div id="upSecretPeek" class="uc-secret-card uc-secret-hidden">
+    <div id="upCategoryLabel" class="muted"></div>
+    <strong id="upSecretWord"></strong>
+  </div>
+
+  <div class="uc-speech-actions">
+    <button id="upRevealBtn" class="secondary full">👁️ 按住查看身分</button>
+    <button id="upSpokenBtn" class="primary full">✅ 發言完畢</button>
+  </div>
+  <div id="upDescribeMsg" class="status">自由決定何時發言。</div>
+
+  <button id="upOpenVoteBtn" class="primary full hidden uc-host-action">🗳️ 開始投票</button>
+</section>
+
+<section id="upVote" class="glass mobile-card hidden">
+  <div class="eyebrow">手機投票</div>
+  <h1>誰最像臥底？</h1>
+  <div id="upVoteProgress" class="notice">0 / 0 已投票</div>
+  <div id="upVoteButtons" class="uc-mobile-votes"></div>
+  <div id="upVoteMsg" class="status">每人只能投一次。</div>
+  <button id="upRevealResultBtn" class="primary full hidden uc-host-action">公布結果</button>
+</section>
+
+<section id="upResult" class="glass mobile-card hidden">
+  <div id="upResultIcon" class="big-icon">🎭</div>
+  <h1 id="upResultTitle">本局結束</h1>
+  <div id="upMyRole" class="notice"></div>
+  <div id="upResultWords" class="uc-reveal-words"></div>
+  <div id="upResultPeople" class="notice"></div>
+  <button id="upAgainBtn" class="primary full hidden">再玩一題</button>
+  <a class="secondary full pk-link-button" href="./undercover-phone.html">離開房間</a>
+</section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script type="module" src="./undercover-phone.js"></script>
+</body>
+</html>

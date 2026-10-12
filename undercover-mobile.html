@@ -23,13 +23,23 @@
 </section>
 
 <section id="umSecret" class="glass mobile-card hidden">
-  <div class="eyebrow">你的秘密詞</div>
-  <div class="uc-secret-card">
-    <div id="umCategory" class="muted"></div>
-    <strong id="umWord">？？？</strong>
+  <div class="eyebrow">自由發言</div>
+  <div class="uc-player-number-wrap">
+    <span>你的號碼</span>
+    <strong id="umPlayerNumber">--</strong>
   </div>
-  <p class="notice">請記住這個詞，不要給別人看。輪到你時描述它，但不要直接說出答案。</p>
-  <div id="umOrderHint" class="status"></div>
+
+  <div id="umSecretPeek" class="uc-secret-card uc-secret-hidden">
+    <div id="umCategory" class="muted"></div>
+    <strong id="umWord"></strong>
+  </div>
+
+  <p class="notice">自由決定何時發言。描述時不要直接說出你的秘密詞。</p>
+  <div class="uc-speech-actions">
+    <button id="umRevealBtn" class="secondary full">👁️ 按住查看身分</button>
+    <button id="umSpokenBtn" class="primary full">✅ 發言完畢</button>
+  </div>
+  <div id="umOrderHint" class="status">按住「查看身分」才會暫時顯示秘密詞。</div>
 </section>
 
 <section id="umVote" class="glass mobile-card hidden">
