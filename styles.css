@@ -296,3 +296,42 @@ button,input,select{font:inherit}button{touch-action:manipulation}.hidden{displa
 .inkpk-lobby-options label{display:grid;gap:6px;font-weight:900}
 .inkpk-lobby-options select{width:100%;margin-bottom:8px}
 .inkpk-char-box strong{max-width:180px;text-align:center;line-height:1.18;word-break:break-all}
+
+.ink-draw-color-box{margin:10px 0 14px;padding:12px;border:1px solid rgba(255,255,255,.10);border-radius:16px;background:rgba(255,255,255,.035)}
+.ink-draw-color-box .ink-color-grid{margin-top:8px}
+
+
+/* ===== v20：手機直接 PK + 戰力平衡 ===== */
+.mobile-pk-link{text-decoration:none;display:block}
+.pk-app{max-width:900px}
+.pk-panel{max-width:760px;margin:0 auto 18px}
+.pk-panel h1,.pk-panel h2{margin-top:10px}
+.pk-or{text-align:center;margin:14px 0;color:var(--muted);font-weight:900}
+.pk-share-grid{display:grid;grid-template-columns:210px 1fr;gap:16px;align-items:center;margin:16px 0}
+.pk-share-grid .qr-box{min-height:190px}
+.pk-link-button{display:block;text-align:center;text-decoration:none;margin-top:10px}
+.pk-battle-grid{display:grid;grid-template-columns:1fr 70px 1fr;gap:12px;align-items:center}
+.pk-battle-grid article{min-width:0;padding:14px;border-radius:18px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
+.pk-battle-name{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:18px}
+.pk-battle-vs{text-align:center;font-weight:1000;font-size:28px;color:var(--gold2)}
+.pk-battle-vs small{font-size:12px;color:var(--muted)}
+.pk-glyph-box{height:220px;margin:12px 0;border-radius:16px;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.pk-glyph-box img{max-width:95%;max-height:95%;object-fit:contain}
+@media(max-width:640px){
+  .pk-share-grid{grid-template-columns:1fr}.pk-share-grid .qr-box{margin:auto}
+  .pk-battle-grid{grid-template-columns:1fr}.pk-battle-vs{padding:2px 0}
+  .pk-glyph-box{height:180px}
+}
+
+
+/* ===== v21：描字目標字樣顯示 ===== */
+.ink-target-card{
+  margin:10px 0 14px;padding:14px 12px;border-radius:18px;text-align:center;
+  background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.10)
+}
+.ink-target-word{
+  margin:8px auto 6px;max-width:100%;font-weight:1000;line-height:1.18;
+  font-size:clamp(42px,12vw,78px);color:var(--gold2);word-break:break-all;
+  text-shadow:0 6px 24px rgba(230,197,109,.16)
+}
+.ink-target-rule{font-size:13px;color:var(--muted);line-height:1.5}

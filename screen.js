@@ -287,11 +287,17 @@ async function ensureNetworkMode(requestedMode){
       const buzz=s.val();
       if(mode==="ttt"&&buzz&&!tttBuzzResolving)resolveTttBuzz(get,update,set,metaRef,tttBuzzRef,tttAnswerRef,buzz);
     });
-    const unInkPk=onValue(inkpkRef,async s=>{
+    const unInkPk=onValue(inkpkRef,async snap=>{
       if(mode!=="inkpk")return;
-      const data=s.val()||{};
-      if(networkState.meta.status==="playing"&&networkState.meta.inkpk?.phase==="draw"){
-        await maybeStartInkBattle(get,update,roomId,roomRef,metaRef,data);
+      const data=snap.val()||{};
+      const freshMeta=(await get(metaRef)).val()||{};
+      if(freshMeta.status==="playing"&&freshMeta.inkpk?.phase==="draw"){
+        await maybeStartInkBattle(get,update,roomId,roomRef,metaRef,data,freshMeta);
+      }
+      const latestMeta=(await get(metaRef)).val()||freshMeta;
+      if(latestMeta.mode==="inkpk"&&["playing","ended"].includes(latestMeta.status)){
+        show("inkpkGame");
+        await renderInkPkHost(db,ref,get,update,roomId,roomRef,metaRef,latestMeta);
       }
     });
 
@@ -304,9 +310,6 @@ async function ensureNetworkMode(requestedMode){
       async startInkPk(){
         const humans=Object.entries(networkState.players||{}).filter(([,p])=>!p.ai);
         if(humans.length<1||humans.length>2){alert("字戰 PK 支援 1 位真人對 AI，或 2 位真人 PK。");return;}
-        const missing=humans.filter(([,p])=>!p.inkColor);
-        if(missing.length){alert("請真人玩家先選擇屬性顏色。");return;}
-
         stopInkBattle();
         const difficulty=$("#inkpkDifficultySelect")?.value||"easy";
         const dInfo=inkDifficultyInfo(difficulty);
@@ -322,9 +325,10 @@ async function ensureNetworkMode(requestedMode){
         if(humans.length===1){
           const colors=["blue","red","green","black","yellow"];
           const aiColor=colors[Math.floor(Math.random()*colors.length)];
-          const completion=Number((0.7+Math.random()*0.3).toFixed(4));
-          const accuracy=completion;
-          const power=Number(Math.max(20,Math.min(200,100+completion*100-(1-accuracy)*100)).toFixed(2));
+          const [lo,hi]=dInfo.ai||[0.70,1.00];
+          const completion=Number((lo+Math.random()*(hi-lo)).toFixed(4));
+          const accuracy=Number((Math.max(0.60,lo-0.05)+Math.random()*(Math.min(1,hi+0.03)-Math.max(0.60,lo-0.05))).toFixed(4));
+          const power=100;
           u["players/__ai__"]={name:"AI 電腦",score:0,inkColor:aiColor,joinedAt:now+1,ai:true,inkPower:power};
           u.inkpk={submissions:{"__ai__":{
             name:"AI 電腦",color:aiColor,power,completion,accuracy,
@@ -337,7 +341,8 @@ async function ensureNetworkMode(requestedMode){
           teamNames:{A:"A隊",B:"B隊"},createdAt:networkState.meta.createdAt||now,
           inkpk:{
             phase:"draw",char,difficulty,difficultyLabel:dInfo.label,difficultyMult:dInfo.mult,
-            drawEndsAt:now+15000,winner:"",clash:0,hp:{},vsAI:humans.length===1
+            drawEndsAt:now+15000,winner:"",clash:0,hp:{},vsAI:humans.length===1,
+            playerIds:humans.length===1?[humans[0][0],"__ai__"]:humans.map(([id])=>id)
           }
         };
         await update(roomRef,u);
@@ -657,12 +662,17 @@ async function resolveTttBuzz(get,update,set,metaRef,tttBuzzRef,tttAnswerRef,buz
 
 
 const INK_DIFFICULTY={
-  easy:{label:"簡單",mult:1.00,pool:["光","愛","信","恩","道","羊"]},
-  normal:{label:"普通",mult:1.15,pool:["平安","盼望","生命","真理","恩典","福音"]},
-  hard:{label:"困難",mult:1.30,pool:["以馬內利","哈利路亞","伯利恆","加利利","耶路撒冷","客西馬尼"]},
-  heaven:{label:"上天堂",mult:1.50,pool:["愛是恆久忍耐","你們是世上的光","主是我的牧者","我就是道路真理生命","起初神創造天地"]}
+  easy:{label:"簡單",mult:1.00,ai:[0.65,0.78],pool:["光","愛","信","恩","道","羊"]},
+  normal:{label:"普通",mult:1.15,ai:[0.72,0.85],pool:["平安","盼望","生命","真理","恩典","福音"]},
+  hard:{label:"困難",mult:1.30,ai:[0.80,0.92],pool:["以馬內利","哈利路亞","伯利恆","加利利","耶路撒冷","客西馬尼"]},
+  heaven:{label:"上天堂",mult:1.50,ai:[0.88,1.00],pool:["愛是恆久忍耐","你們是世上的光","主是我的牧者","我就是道路真理生命","起初神創造天地"]}
 };
 function inkDifficultyInfo(key){return INK_DIFFICULTY[key]||INK_DIFFICULTY.easy;}
+function inkCompletionFactor(v){return Math.max(0.70,Math.min(1,Number(v||0)));}
+function inkDefenseFactor(v){return 0.90+Math.max(0,Math.min(1,Number(v||0)))*0.10;}
+function inkAttackFactor(colorAtk,colorDef,completion,difficultyMult){
+  return Math.min(1.80,inkColorMultiplier(colorAtk,colorDef)*inkCompletionFactor(completion)*Number(difficultyMult||1));
+}
 function makeAiGlyphImage(text,color){
   const fill=INK_COLOR_HEX[color]||"#111827";
   const safe=String(text||"光").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
@@ -708,18 +718,21 @@ function setInkFighterUi(slot,p,sub,hp,maxHp,enemyColor){
   if(sub?.image){img.src=sub.image;img.classList.remove("hidden");}else{img.removeAttribute("src");img.classList.add("hidden");}
   const cm=inkColorMultiplier(p?.inkColor,enemyColor);
   const dm=Number(networkState.meta?.inkpk?.difficultyMult||1);
-  const final=cm*Number(sub?.completion||0)*dm;
-  $(`#inkpkMult${n}`).textContent=`屬性 ${cm.toFixed(2)} × 完整度 ${Number(sub?.completion||0).toFixed(2)} × 難度 ${dm.toFixed(2)} ＝ 攻擊 ${final.toFixed(2)}×`;
+  const cf=inkCompletionFactor(sub?.completion||0);
+  const df=inkDefenseFactor(sub?.accuracy||0);
+  const final=inkAttackFactor(p?.inkColor,enemyColor,sub?.completion||0,dm);
+  $(`#inkpkMult${n}`).textContent=`攻擊 ${final.toFixed(2)}×（屬性 ${cm.toFixed(2)}・描字 ${cf.toFixed(2)}・難度 ${dm.toFixed(2)}，上限 1.80）｜防禦 ${df.toFixed(2)}`;
 }
 async function renderInkPkHost(db,ref,get,update,roomId,roomRef,metaRef,m){
   const ip=m.inkpk||{},phase=ip.phase||"draw";
   $("#inkpkHostChar").textContent=ip.char||"勇";
   $("#inkpkHostChar").style.fontSize=[...(ip.char||"勇")].length<=2?"56px":[...(ip.char||"勇")].length<=5?"34px":"22px";
-  $("#inkpkRuleHint").textContent=`難度：${ip.difficultyLabel||"簡單"}（${Number(ip.difficultyMult||1).toFixed(2)}×）｜15 秒描寫；完整度會直接乘上攻擊倍率${ip.vsAI?"｜本局為 AI 對戰":""}`;
+  $("#inkpkRuleHint").textContent=`難度：${ip.difficultyLabel||"簡單"}（${Number(ip.difficultyMult||1).toFixed(2)}×）｜雙方固定 100 HP｜完整度影響攻擊（最低 0.70）・準確度影響防禦・最終攻擊上限 1.80×${ip.vsAI?"｜本局為 AI 對戰":""}`;
   $("#inkpkWinner").classList.add("hidden");
   $("#inkpkRestartBtn").classList.add("hidden");
   const ps=(await get(ref(db,`rooms/${roomId}/players`))).val()||{};
-  const ids=Object.keys(ps).sort((a,b)=>(ps[a].joinedAt||0)-(ps[b].joinedAt||0));
+  let ids=Array.isArray(ip.playerIds)?ip.playerIds.filter(Boolean):[];
+  if(ids.length!==2)ids=Object.keys(ps).sort((a,b)=>(ps[a].joinedAt||0)-(ps[b].joinedAt||0)).slice(0,2);
   const subs=(await get(ref(db,`rooms/${roomId}/inkpk/submissions`))).val()||{};
   const a=ids[0],b=ids[1];
   if(!a||!b){
@@ -734,7 +747,10 @@ async function renderInkPkHost(db,ref,get,update,roomId,roomRef,metaRef,m){
   if(phase==="draw"){
     const done=Object.keys(subs).filter(id=>ids.includes(id)).length;
     $("#inkpkHostStatus").textContent=`描字中：${done}/2 已完成`;
-    $("#inkpkClashText").textContent="15 秒描寫中";
+    $("#inkpkClashText").textContent=done>=2?"雙方已完成，正在進入對戰…":"15 秒描寫中";
+    if(done>=2){
+      await maybeStartInkBattle(get,update,roomId,roomRef,metaRef,{submissions:subs},m);
+    }
     return;
   }
   if(phase==="battle"){
@@ -753,19 +769,43 @@ async function renderInkPkHost(db,ref,get,update,roomId,roomRef,metaRef,m){
     $("#inkpkRestartBtn").classList.remove("hidden");
   }
 }
-async function maybeStartInkBattle(get,update,roomId,roomRef,metaRef,data){
-  if(networkState.meta.inkpk?.phase!=="draw")return;
+async function maybeStartInkBattle(get,update,roomId,roomRef,metaRef,data,freshMeta=null){
+  const meta=freshMeta||((await get(metaRef)).val()||{});
+  if(meta.status!=="playing"||meta.mode!=="inkpk"||meta.inkpk?.phase!=="draw")return false;
+
   const ps=(await get(ref(db,`rooms/${roomId}/players`))).val()||{};
-  const ids=Object.keys(ps).sort((a,b)=>(ps[a].joinedAt||0)-(ps[b].joinedAt||0));
-  if(ids.length!==2)return;
-  const subs=data.submissions||{};
-  if(!subs[ids[0]]||!subs[ids[1]])return;
-  const hp={},maxHp={};
+  let ids=Array.isArray(meta.inkpk?.playerIds)?meta.inkpk.playerIds.filter(Boolean):[];
+  if(ids.length!==2){
+    ids=Object.keys(ps)
+      .filter(id=>id==="__ai__"||!ps[id]?.ai)
+      .sort((a,b)=>(ps[a]?.joinedAt||0)-(ps[b]?.joinedAt||0))
+      .slice(0,2);
+  }
+  if(ids.length!==2)return false;
+
+  // Read submissions again from Firebase instead of trusting a possibly stale listener snapshot.
+  const freshSubs=(await get(ref(db,`rooms/${roomId}/inkpk/submissions`))).val()||data?.submissions||{};
+  const a=ids[0],b=ids[1];
+  if(!freshSubs[a]||!freshSubs[b])return false;
+  if(!freshSubs[a].color||!freshSubs[b].color)return false;
+
+  const colorSync={};
   ids.forEach(id=>{
-    const v=Math.max(1,Number(subs[id].power||100));
-    hp[id]=v;maxHp[id]=v;
+    if(ps[id]?.inkColor!==freshSubs[id].color)colorSync[`players/${id}/inkColor`]=freshSubs[id].color;
   });
-  await update(metaRef,{"inkpk/phase":"battle","inkpk/hp":hp,"inkpk/maxHp":maxHp,"inkpk/clash":0});
+  if(Object.keys(colorSync).length)await update(roomRef,colorSync);
+
+  const hp={},maxHp={};
+  ids.forEach(id=>{hp[id]=100;maxHp[id]=100;});
+
+  await update(metaRef,{
+    "inkpk/phase":"battle",
+    "inkpk/hp":hp,
+    "inkpk/maxHp":maxHp,
+    "inkpk/clash":0,
+    "inkpk/playerIds":ids
+  });
+  return true;
 }
 function startInkBattleLoop(get,update,roomId,roomRef,metaRef,ids){
   stopInkBattle();inkBattleClash=0;
@@ -779,14 +819,17 @@ function startInkBattleLoop(get,update,roomId,roomRef,metaRef,ids){
         get(metaRef)
       ]);
       const ps=pSnap.val()||{},subs=sSnap.val()||{},meta=mSnap.val()||{},ip=meta.inkpk||{};
-      const [a,b]=ids;
+      const matchIds=(Array.isArray(ip.playerIds)&&ip.playerIds.length===2)?ip.playerIds:ids;
+      const [a,b]=matchIds;
       if(!a||!b||!subs[a]||!subs[b])return;
       let ha=Number(ip.hp?.[a]??subs[a].power??100),hb=Number(ip.hp?.[b]??subs[b].power??100);
       const ca=Number(subs[a].completion||0),cb=Number(subs[b].completion||0);
+      const aa=Number(subs[a].accuracy||0),ab=Number(subs[b].accuracy||0);
       const dm=Number(ip.difficultyMult||1);
-      const ma=inkColorMultiplier(ps[a]?.inkColor,ps[b]?.inkColor)*ca*dm;
-      const mb=inkColorMultiplier(ps[b]?.inkColor,ps[a]?.inkColor)*cb*dm;
-      const dmgA=8*ma,dmgB=8*mb;
+      const ma=inkAttackFactor(ps[a]?.inkColor,ps[b]?.inkColor,ca,dm);
+      const mb=inkAttackFactor(ps[b]?.inkColor,ps[a]?.inkColor,cb,dm);
+      const defA=inkDefenseFactor(aa),defB=inkDefenseFactor(ab);
+      const dmgA=8*ma/defB,dmgB=8*mb/defA;
       const beforeA=ha,beforeB=hb;
       hb=Math.max(0,hb-dmgA);
       ha=Math.max(0,ha-dmgB);

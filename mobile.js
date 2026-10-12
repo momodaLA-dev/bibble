@@ -28,7 +28,7 @@ let chainPhoneX=50,chainAnimId=null,chainLastFrame=0,chainOwnState={};
 let chainShakeProgress=0,chainLastShakeAt=0,chainLastAccel=0;
 let dodgeBaselineBeta=null,dodgeBaselineGamma=null,dodgeMotionOn=false,dodgeLastAccel=0;
 let dodgeCurrentRound=0,dodgeSubmittedRound=0,dodgeOwnState={},dodgeTiltArmed=true;
-let selectedInkColor=sessionStorage.getItem(`bible_ink_color_${roomId}`)||"";
+let selectedInkColor="";
 let inkDrawStarted=false,inkDrawSubmitted=false,inkDrawTimer=null,inkPointerDown=false;
 let inkDrawCtx=null,inkTemplateCtx=null,inkStrokePoints=0;
 
@@ -39,7 +39,6 @@ $("#joinBtn").addEventListener("click",joinGame);
 $("#nameInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();joinGame()}});
 $("#pickA").addEventListener("click",()=>pickTeam("A"));
 $("#pickB").addEventListener("click",()=>pickTeam("B"));
-$$("[data-ink-color]").forEach(b=>b.addEventListener("click",()=>pickInkColor(b.dataset.inkColor)));
 ["A","B","C","D"].forEach(k=>$("#vote"+k).addEventListener("click",()=>cast(k)));
 ["A","B","C","D"].forEach(k=>$("#tttVote"+k)?.addEventListener("click",()=>submitTttAnswer(k)));
 $("#tttBuzzBtn")?.addEventListener("click",submitTttBuzz);
@@ -56,14 +55,19 @@ $("#chainRightBtn")?.addEventListener("pointerdown",()=>sendDir("right",true));
 $("#chainStopBtn")?.addEventListener("click",()=>sendDir("stop",true));
 $("#chainBreakTap")?.addEventListener("click",()=>registerChainShake(true));
 $("#inkClearBtn")?.addEventListener("click",clearInkCanvas);
+$$("[data-ink-draw-color]").forEach(b=>b.addEventListener("click",()=>pickInkColor(b.dataset.inkDrawColor)));
 $("#dodgeEnableMotionBtn")?.addEventListener("click",enableDodgeMotion);
 $$("[data-dodge]").forEach(b=>b.addEventListener("click",()=>submitDodgeAction(b.dataset.dodge)));
 
 function pickTeam(t){selectedTeam=t;sessionStorage.setItem(`bible_team_${roomId}`,t);$("#pickA").classList.toggle("active",t==="A");$("#pickB").classList.toggle("active",t==="B");}
 function pickInkColor(c){
   selectedInkColor=c;
-  sessionStorage.setItem(`bible_ink_color_${roomId}`,c);
-  $$("[data-ink-color]").forEach(b=>b.classList.toggle("active",b.dataset.inkColor===c));
+  $$("[data-ink-draw-color]").forEach(b=>b.classList.toggle("active",b.dataset.inkDrawColor===c));
+  if($("#inkpkMyColor")){
+    $("#inkpkMyColor").textContent=`我的屬性：${inkColorNameM(c)}`;
+    $("#inkpkMyColor").style.borderColor=INK_COLOR_HEX_M[c]||"transparent";
+  }
+  if($("#inkColorHint"))$("#inkColorHint").textContent=`目前筆色：${inkColorNameM(c)}。15 秒內可以繼續切換；最後選擇的顏色作為本局屬性。`;
   if(playerId&&roomMode==="inkpk"){
     update(ref(db,`rooms/${roomId}/players/${playerId}`),{inkColor:c}).catch(()=>{});
   }
@@ -71,10 +75,10 @@ function pickInkColor(c){
 function refreshModeUi(){
   const team=roomMode==="team"||roomMode==="ttt",ox=roomMode==="ox",inkpk=roomMode==="inkpk";
   $("#teamPicker").classList.toggle("hidden",!team);
-  $("#inkColorPicker")?.classList.toggle("hidden",!inkpk);
+
   $("#modeHint").textContent=roomMode==="team"?"⚔️ 這是兩隊競賽：輸入名字後選擇隊伍。":roomMode==="ttt"?"⭕❌ 九宮格答題戰：先選 A隊／B隊；每回合系統會隨機抽一人選格。":roomMode==="chain"?"⛓️ 鎖鏈逃脫：左右傾斜躲開鎖鏈；被纏住後快速左右甩動手機掙脫。":roomMode==="dodge"?"💨 極限閃避：看螢幕箭頭，用手機上下左右傾斜，或做小幅度跳躍動作。撞到就出局。":roomMode==="inkpk"?"✍️⚔️ 字戰 PK：選屬性後，15 秒內沿模板描字；描得越完整、越準，戰力越高。":ox?"🕹️ 這是 OX 走位搶答：加入後用手機傾斜控制小人物。":"📱 這是手機多人模式：輸入名字後加入個人競賽。";
   $("#pickA").textContent=teamNames.A||"A隊";$("#pickB").textContent=teamNames.B||"B隊";
-  if(selectedTeam)pickTeam(selectedTeam);if(selectedInkColor)pickInkColor(selectedInkColor);
+  if(selectedTeam)pickTeam(selectedTeam);
   $("#myTeam").classList.toggle("hidden",!team);
   if(team&&selectedTeam)$("#myTeam").textContent=`所屬隊伍：${teamNames[selectedTeam]||selectedTeam}`;
 }
@@ -87,11 +91,10 @@ async function joinGame(){
   const meta=m.val();roomMode=meta.mode||"online";teamNames=meta.teamNames||teamNames;refreshModeUi();
   if(meta.status!=="waiting"){$("#joinMsg").textContent="這局已開始，請等待下一局";return}
   if((roomMode==="team"||roomMode==="ttt")&&!selectedTeam){$("#joinMsg").textContent="請先選擇 A隊或 B隊";return}
-  if(roomMode==="inkpk"&&!selectedInkColor){$("#joinMsg").textContent="請先選擇藍／紅／綠／黑／黃其中一種屬性";return}
   playerId=makeId();playerName=name;
   sessionStorage.setItem(`bible_player_${roomId}`,playerId);sessionStorage.setItem(`bible_name_${roomId}`,playerName);
   const pr=ref(db,`rooms/${roomId}/players/${playerId}`);
-  await set(pr,{name:playerName,score:0,team:(roomMode==="team"||roomMode==="ttt")?selectedTeam:null,inkColor:roomMode==="inkpk"?selectedInkColor:null,joinedAt:Date.now()});
+  await set(pr,{name:playerName,score:0,team:(roomMode==="team"||roomMode==="ttt")?selectedTeam:null,inkColor:null,joinedAt:Date.now()});
   onDisconnect(pr).remove();
   $("#welcome").textContent=`歡迎 ${playerName}`;refreshModeUi();show("waiting");
 }
@@ -412,6 +415,10 @@ function inkCanvasPoint(e){
 }
 function inkPointerStart(e){
   if(inkDrawSubmitted)return;
+  if(!selectedInkColor){
+    if($("#inkColorHint"))$("#inkColorHint").textContent="請先選擇筆色／屬性，再開始描寫。";
+    return;
+  }
   e.preventDefault();inkPointerDown=true;$("#inkDrawCanvas").setPointerCapture?.(e.pointerId);
   const p=inkCanvasPoint(e);inkDrawCtx.beginPath();inkDrawCtx.moveTo(p.x,p.y);
 }
@@ -440,6 +447,7 @@ function evaluateInk(){
   }
   const completion=template?covered/template:0;
   const accuracy=ink?covered/ink:1;
+  // 評分完全依目前畫面顯示的字樣模板：模板內覆蓋越完整越高，寫到模板外越多則準確度越低。
   const power=Math.max(20,Math.min(200,100+completion*100-(1-accuracy)*100));
   return {completion:Math.max(0,Math.min(1,completion)),accuracy:Math.max(0,Math.min(1,accuracy)),power};
 }
@@ -451,6 +459,7 @@ function updateInkLiveStats(){
 }
 async function submitInkDrawing(){
   if(inkDrawSubmitted||!playerId)return;
+  if(!selectedInkColor)pickInkColor("blue");
   inkDrawSubmitted=true;if(inkDrawTimer){clearInterval(inkDrawTimer);inkDrawTimer=null;}
   const r=evaluateInk();
   const canvas=$("#inkDrawCanvas");
@@ -461,10 +470,11 @@ async function submitInkDrawing(){
     completion:Number(r.completion.toFixed(4)),accuracy:Number(r.accuracy.toFixed(4)),
     image,submittedAt:Date.now()
   });
+  await update(ref(db,`rooms/${roomId}/inkpk/ready`),{[playerId]:Date.now()});
   $("#inkpkDrawPanel").classList.add("hidden");
   $("#inkpkWaitPanel").classList.remove("hidden");
   const meta=(await get(ref(db,`rooms/${roomId}/meta`))).val();
-  $("#inkpkWaitText").textContent=`完成度 ${Math.round(r.completion*100)}%・準確度 ${Math.round(r.accuracy*100)}%・戰力 ${Math.round(r.power)}｜${meta?.inkpk?.vsAI?"AI 已準備，等待進入對戰…":"等待對手…"}`;
+  $("#inkpkWaitText").textContent=`完成度 ${Math.round(r.completion*100)}%・準確度 ${Math.round(r.accuracy*100)}%・描字分 ${Math.round(r.power)}｜對戰 HP 固定 100｜${meta?.inkpk?.vsAI?"AI 已準備，等待進入對戰…":"等待對手…"}`;
 }
 async function renderInkPkMobile(meta){
   clearTimer();
@@ -474,8 +484,13 @@ async function renderInkPkMobile(meta){
   if(phase==="draw"){
     $("#inkpkBattlePanel").classList.add("hidden");
     if(!inkDrawStarted){
-      inkDrawStarted=true;inkDrawSubmitted=false;
+      inkDrawStarted=true;inkDrawSubmitted=false;selectedInkColor="";
+      $$("[data-ink-draw-color]").forEach(b=>b.classList.remove("active"));
+      $("#inkpkMyColor").textContent="我的屬性：尚未選擇";
+      $("#inkpkMyColor").style.borderColor="transparent";
+      $("#inkColorHint").textContent="請先選擇筆色／屬性，再開始描寫；15 秒內仍可切換筆色。";
       $("#inkpkDrawPanel").classList.remove("hidden");$("#inkpkWaitPanel").classList.add("hidden");
+      $("#inkTargetWord").textContent=ip.char||"勇";
       setupInkCanvas(ip.char||"勇");
       $("#inkpkMobileTitle").textContent=`${ip.difficultyLabel||"簡單"}｜請描寫「${ip.char||"勇"}」`;
       const end=Number(ip.drawEndsAt||Date.now()+15000);

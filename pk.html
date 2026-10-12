@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#07111f">
+  <title>手機直接字戰 PK</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<main class="app pk-app">
+  <header class="header">
+    <div>
+      <div class="brand">📱⚔️ 手機直接字戰 PK</div>
+      <div class="muted">不用電腦・建立房間後兩支手機直接對戰</div>
+    </div>
+    <a class="ghost" href="./index.html">⌂ 回首頁</a>
+  </header>
+
+  <section id="pkEntry" class="glass pk-panel">
+    <div class="eyebrow">MOBILE INK BATTLE</div>
+    <h1>建立或加入 PK</h1>
+    <label>你的名字
+      <input id="pkName" maxlength="12" placeholder="例如：若瑩">
+    </label>
+
+    <div id="pkCreateOptions">
+      <label>難度
+        <select id="pkDifficulty">
+          <option value="easy">🟢 簡單｜1.00×</option>
+          <option value="normal">🟡 普通｜1.15×</option>
+          <option value="hard">🔴 困難｜1.30×</option>
+          <option value="heaven">👼 上天堂｜1.50×</option>
+        </select>
+      </label>
+      <button id="pkCreateBtn" class="primary full">建立 PK 房間</button>
+    </div>
+
+    <div class="pk-or">或</div>
+
+    <label>輸入房號
+      <input id="pkRoomInput" maxlength="5" placeholder="例如 A7K9P" autocapitalize="characters">
+    </label>
+    <button id="pkJoinBtn" class="secondary full">加入房間</button>
+    <div id="pkEntryMsg" class="status"></div>
+  </section>
+
+  <section id="pkLobby" class="glass pk-panel hidden">
+    <div class="title-row">
+      <div>
+        <div class="eyebrow">等待區</div>
+        <h2>房號 <strong id="pkRoomCode">-----</strong></h2>
+      </div>
+      <strong id="pkPlayerCount">0 / 2</strong>
+    </div>
+
+    <div class="pk-share-grid">
+      <div id="pkQr" class="qr-box"></div>
+      <div>
+        <div class="muted">第二支手機可掃 QR Code，或輸入房號加入。</div>
+        <div id="pkJoinLink" class="join-url"></div>
+        <button id="pkCopyBtn" class="secondary full">複製加入連結</button>
+      </div>
+    </div>
+
+    <div id="pkLobbyPlayers" class="player-wrap"></div>
+    <div id="pkDifficultyLabel" class="notice"></div>
+    <button id="pkStartBtn" class="primary full hidden">開始 PK</button>
+    <div id="pkLobbyMsg" class="status">等待玩家加入…</div>
+  </section>
+
+  <section id="pkDraw" class="glass pk-panel hidden">
+    <div class="title-row">
+      <div>
+        <div class="eyebrow">15 秒描字</div>
+        <h2 id="pkDrawTitle">請描寫</h2>
+      </div>
+      <div id="pkDrawTimer" class="mobile-timer">⏱ 15.0 秒</div>
+    </div>
+
+    <div class="ink-target-card">
+      <div class="muted">本局描寫字樣</div>
+      <div id="pkTargetWord" class="ink-target-word">恩</div>
+      <div class="ink-target-rule">請照這個字樣描寫；評分以模板覆蓋率＋描寫準確度為基準</div>
+    </div>
+
+    <div class="ink-draw-color-box">
+      <div class="muted">先選筆色／屬性</div>
+      <div class="ink-color-grid">
+        <button type="button" data-pk-color="blue" class="ink-color-btn blue">藍</button>
+        <button type="button" data-pk-color="red" class="ink-color-btn red">紅</button>
+        <button type="button" data-pk-color="green" class="ink-color-btn green">綠</button>
+        <button type="button" data-pk-color="black" class="ink-color-btn black">黑</button>
+        <button type="button" data-pk-color="yellow" class="ink-color-btn yellow">黃</button>
+      </div>
+      <div id="pkColorHint" class="muted">選色後開始描寫；最後選擇的顏色就是本局屬性。</div>
+    </div>
+
+    <div class="ink-canvas-wrap">
+      <canvas id="pkTemplateCanvas" width="320" height="320" aria-hidden="true"></canvas>
+      <canvas id="pkDrawCanvas" width="320" height="320" aria-label="描字畫布"></canvas>
+    </div>
+
+    <div class="ink-live-stats">
+      <div><span>描字分</span><strong id="pkInkScore">100</strong></div>
+      <div><span>完整度</span><strong id="pkCompletion">0%</strong></div>
+      <div><span>準確度</span><strong id="pkAccuracy">100%</strong></div>
+    </div>
+    <button id="pkClearBtn" class="secondary full">清除重寫</button>
+    <div id="pkDrawMsg" class="status"></div>
+  </section>
+
+  <section id="pkWait" class="glass pk-panel hidden">
+    <div class="big-icon">⚔️</div>
+    <h2>描字完成</h2>
+    <div id="pkWaitStats" class="notice"></div>
+    <div id="pkWaitMsg" class="status">等待對手完成…</div>
+  </section>
+
+  <section id="pkBattle" class="glass pk-panel hidden">
+    <div class="eyebrow">BATTLE</div>
+    <h2 id="pkBattleTitle">字正在碰撞！</h2>
+    <div class="pk-battle-grid">
+      <article>
+        <div class="pk-battle-name"><b id="pkMeName">我</b><span id="pkMeColor" class="ink-color-dot"></span></div>
+        <div class="inkpk-hp-shell"><div id="pkMeHp" class="inkpk-hp-bar"></div></div>
+        <strong id="pkMeHpText">100 / 100</strong>
+        <div class="pk-glyph-box"><img id="pkMeGlyph" alt="我的字"></div>
+        <div id="pkMeStats" class="muted"></div>
+      </article>
+      <div class="pk-battle-vs">VS<br><small id="pkClashNo">0</small></div>
+      <article>
+        <div class="pk-battle-name"><b id="pkEnemyName">對手</b><span id="pkEnemyColor" class="ink-color-dot"></span></div>
+        <div class="inkpk-hp-shell"><div id="pkEnemyHp" class="inkpk-hp-bar"></div></div>
+        <strong id="pkEnemyHpText">100 / 100</strong>
+        <div class="pk-glyph-box"><img id="pkEnemyGlyph" alt="對手的字"></div>
+        <div id="pkEnemyStats" class="muted"></div>
+      </article>
+    </div>
+    <div id="pkBattleMsg" class="status">準備碰撞…</div>
+  </section>
+
+  <section id="pkEnd" class="glass pk-panel hidden">
+    <div class="big-icon" id="pkEndIcon">🏆</div>
+    <h1 id="pkEndTitle">對戰結束</h1>
+    <div id="pkEndDetail" class="notice"></div>
+    <button id="pkAgainBtn" class="primary full hidden">再玩一次</button>
+    <a class="secondary full pk-link-button" href="./pk.html">離開房間</a>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script type="module" src="./pk.js"></script>
+</body>
+</html>
